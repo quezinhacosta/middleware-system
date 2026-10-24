@@ -1,0 +1,57 @@
+name: CI - Code Quality & Tests
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  lint-and-quality:
+    name: Lint, Type Check & Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Instalar Dependências de Desenvolvimento
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Verificar Linting com Ruff
+        run: |
+          ruff check .
+
+      - name: Verificar Formatação com Ruff
+        run: |
+          ruff format --check .
+
+      - name: Checagem de Tipagem Estática com Mypy
+        run: |
+          if [ $(find . -maxdepth 4 -name "*.py" -not -path "*/.*" | wc -l) -gt 0 ]; then
+            mypy . --ignore-missing-imports --config-file=pyproject.toml
+          else
+            echo "Nenhum arquivo Python (.py) encontrado ainda no projeto. Pulando Mypy temporariamente."
+          fi
+
+      - name: Executar Testes Automatizados (se existirem)
+        run: |
+          if [ -d "tests" ]; then
+            pytest
+          else
+            echo "Diretorio tests/ sera implementado nas proximas issues. Pulando execucao de testes."
+          fi
+

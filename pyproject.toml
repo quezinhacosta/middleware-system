@@ -1,0 +1,60 @@
+#padroes de qualidade do projeto
+[project]
+name = "middleware-system"
+version = "0.1.0"
+description = "Middleware distribuído para aplicação de e-commerce resiliente e segura"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Quezia Costa" },
+    { name = "Lettyicia" },
+    { name = "Lucas Mendes" },
+    { name = "João Victor" },
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "docs",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (organização de imports)
+    "B",   # flake8-bugbear (prevenção de bugs)
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade (sintaxe moderna de Python)
+]
+ignore = [
+    "E501",  # Comprimento de linha delegado ao formatador
+    "B008",  # Permite chamadas de função em defaults de argumentos (padrão FastAPI Depends)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["middleware", "services"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+strict_optional = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra -q --strict-markers"
+asyncio_mode = "auto"
+

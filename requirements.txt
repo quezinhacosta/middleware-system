@@ -1,0 +1,21 @@
+#dependencias de produção para o middleware-system
+# Framework Web e Servidor ASGI
+fastapi>=0.110.0,<1.0.0
+uvicorn[standard]>=0.28.0,<1.0.0
+pydantic>=2.6.0,<3.0.0
+pydantic-settings>=2.2.0,<3.0.0
+
+# Cliente HTTP Resiliente (Síncrono / Assíncrono)
+httpx>=0.27.0,<1.0.0
+
+# Mensageria e Comunicação com RabbitMQ (AMQP)
+pika>=1.3.2,<2.0.0
+aio-pika>=9.4.0,<10.0.0
+
+# Segurança e Autenticação Stateless (JWT)
+PyJWT[crypto]>=2.8.0,<3.0.0
+
+# Observabilidade e Métricas
+prometheus-client>=0.20.0,<1.0.0
+python-json-logger>=2.0.7,<3.0.0
+
