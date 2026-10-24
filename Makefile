@@ -28,7 +28,11 @@ pre-commit-install:
 
 lint:
 	ruff check .
-	mypy middleware services --ignore-missing-imports
+	@if [ $$(find . -maxdepth 4 -name "*.py" -not -path "*/.*" | wc -l) -gt 0 ]; then \
+		mypy . --ignore-missing-imports; \
+	else \
+		echo "Nenhum arquivo Python (.py) encontrado ainda para o Mypy."; \
+	fi
 
 format:
 	ruff check --fix .

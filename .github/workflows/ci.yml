@@ -41,7 +41,11 @@ jobs:
 
       - name: Checagem de Tipagem Estática com Mypy
         run: |
-          mypy . --ignore-missing-imports --config-file=pyproject.toml
+          if [ $(find . -maxdepth 4 -name "*.py" -not -path "*/.*" | wc -l) -gt 0 ]; then
+            mypy . --ignore-missing-imports --config-file=pyproject.toml
+          else
+            echo "Nenhum arquivo Python (.py) encontrado ainda no projeto. Pulando Mypy temporariamente."
+          fi
 
       - name: Executar Testes Automatizados (se existirem)
         run: |
