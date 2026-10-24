@@ -15,4 +15,3 @@ def read_root() -> dict[str, str]:
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "healthy", "service": "order-service"}
-
