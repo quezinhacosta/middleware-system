@@ -144,9 +144,11 @@ docker compose down
 ```
 ---
 
-##  Política de Uso de Inteligência Artificial
+##  Política de Uso 
 
 Em estrito cumprimento às diretrizes acadêmicas do projeto:
 * O uso de ferramentas de IA (ex: Claude, ChatGPT, Gemini, Copilot) é realizado de forma consciente para apoio em ideação, estruturação arquitetural, documentação e testes.
 * Toda a lógica gerada é revisada, validada e compreendida integralmente pela equipe.
 * O relatório técnico final conterá a seção obrigatória discriminando as ferramentas utilizadas, os prompts fundamentais aplicados e a respectiva contribuição no ciclo de desenvolvimento.
+* Os commits realizados apresentam consciência e descrição breve do que foi realizado especificamente naquele commit
+* Pull Requests são utilizadas obrigatoriamente. Tanto para compreensão geral do grupo sobre o que está sendo feito, tanto para controle de versão e funcionamento de código
