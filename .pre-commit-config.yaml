@@ -1,0 +1,36 @@
+# Configuração de Hooks do Pre-Commit
+# Documentação: https://pre-commit.com/
+
+default_language_version:
+  python: python3.11
+
+repos:
+  # Validações estruturais e de integridade de arquivos
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+
+  # Linter e Formatador Ultrarrápido (Ruff)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # Verificação de Tipagem Estática (Mypy)
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.9.0
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports, --config-file=pyproject.toml]
+        additional_dependencies:
+          - pydantic>=2.6.0
+          - types-PyYAML
+
