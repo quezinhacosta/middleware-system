@@ -1,0 +1,35 @@
+# Controle de Versao e Git
+.git
+.gitignore
+
+# Ambientes Virtuais e Pacotes Locais
+.venv
+venv
+env
+*.egg-info
+
+# Bytecode e Caches Python
+__pycache__
+*.py[cod]
+*$py.class
+.cache
+
+# Caches de Linters, Tipagem e Testes
+.pytest_cache
+.coverage
+htmlcov
+.mypy_cache
+.ruff_cache
+
+# Segredos e Variaveis de Ambiente
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Documentacao e Arquivos Auxiliares de Build
+docs
+*.md
+Makefile
+
