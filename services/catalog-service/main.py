@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 
-
 app = FastAPI(
     title="Catalog Service",
     description="Microsserviço de catálogo e estoque do e-commerce",
