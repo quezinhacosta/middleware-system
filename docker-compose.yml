@@ -11,7 +11,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --app-dir services/order-service
+    command: uvicorn services.order_service.main:app --host 0.0.0.0 --port 8000
     ports:
       # Ponto de entrada do cliente/gateway exposto para o host
       - "8000:8000"
@@ -43,7 +43,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: uvicorn main:app --host 0.0.0.0 --port 8001 --app-dir services/catalog-service
+    command: uvicorn services.catalog_service.main:app --host 0.0.0.0 --port 8001
     # Porta interna acessivel apenas pelos containers da rede ecommerce-network (nao exposta no host)
     expose:
       - "8001"
