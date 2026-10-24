@@ -1,6 +1,5 @@
 FROM python:3.11-slim
 
-# Evita geracao de arquivos .pyc e forca flush imediato de logs no stdout
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app

@@ -1,0 +1,71 @@
+name: middleware-system
+
+networks:
+  ecommerce-network:
+    name: ecommerce-network
+    driver: bridge
+
+services:
+  order-service:
+    container_name: order-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --app-dir services/order-service
+    ports:
+      # Ponto de entrada do cliente/gateway exposto para o host
+      - "8000:8000"
+    environment:
+      - SERVICE_NAME=order-service
+      - PORT=8000
+      - CATALOG_SERVICE_URL=http://catalog-service:8001
+      - LOG_LEVEL=INFO
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  catalog-service:
+    container_name: catalog-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --app-dir services/catalog-service
+    # Porta interna acessivel apenas pelos containers da rede ecommerce-network (nao exposta no host)
+    expose:
+      - "8001"
+    environment:
+      - SERVICE_NAME=catalog-service
+      - PORT=8001
+      - LOG_LEVEL=INFO
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
