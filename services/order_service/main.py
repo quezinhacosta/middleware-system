@@ -2,6 +2,7 @@ import os
 
 from fastapi import FastAPI
 
+from middleware.observability.correlation import CorrelationIdMiddleware
 from middleware.observability.logging import configure_logging
 
 configure_logging(
@@ -14,6 +15,7 @@ app = FastAPI(
     description="Microsserviço de gestão e checkout de pedidos do e-commerce",
     version="0.1.0",
 )
+app.add_middleware(CorrelationIdMiddleware)
 
 
 @app.get("/")
