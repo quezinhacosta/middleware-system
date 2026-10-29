@@ -18,8 +18,20 @@ services:
     environment:
       - SERVICE_NAME=order-service
       - PORT=8000
-      - CATALOG_SERVICE_URL=http://catalog-service:8001
-      - LOG_LEVEL=INFO
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-super-secret-distributed-middleware-key-change-in-production-2026}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
+      - HTTP_TIMEOUT_SECONDS=${HTTP_TIMEOUT_SECONDS:-3.0}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL:-http://order-service:8000}
+      - CATALOG_SERVICE_URL=${CATALOG_SERVICE_URL:-http://catalog-service:8001}
     networks:
       - ecommerce-network
     restart: unless-stopped
@@ -50,7 +62,20 @@ services:
     environment:
       - SERVICE_NAME=catalog-service
       - PORT=8001
-      - LOG_LEVEL=INFO
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-super-secret-distributed-middleware-key-change-in-production-2026}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
+      - HTTP_TIMEOUT_SECONDS=${HTTP_TIMEOUT_SECONDS:-3.0}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL:-http://order-service:8000}
+      - CATALOG_SERVICE_URL=${CATALOG_SERVICE_URL:-http://catalog-service:8001}
     networks:
       - ecommerce-network
     restart: unless-stopped
@@ -68,4 +93,3 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-
