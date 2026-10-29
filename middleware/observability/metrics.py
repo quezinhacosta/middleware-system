@@ -6,7 +6,16 @@ conflito de nomes entre instâncias (útil nos testes).
 
 import time
 
-from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
+from fastapi import APIRouter
+from fastapi.responses import Response
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 HTTP_DURATION_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
@@ -103,3 +112,17 @@ class MetricsMiddleware:
                 status_code=status_code,
                 duration=duration,
             )
+
+
+def build_metrics_router(collector: MetricsCollector) -> APIRouter:
+    """Expõe ``GET /metrics`` no formato de texto do Prometheus."""
+    router = APIRouter(tags=["metrics"])
+
+    @router.get("/metrics")
+    def metrics() -> Response:
+        return Response(
+            content=generate_latest(collector.registry),
+            media_type=CONTENT_TYPE_LATEST,
+        )
+
+    return router
