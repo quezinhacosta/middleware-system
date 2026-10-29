@@ -105,4 +105,3 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Retorna uma instância única (singleton em cache) das configurações validadas."""
     return Settings()
-
