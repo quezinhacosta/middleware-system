@@ -4,7 +4,11 @@ from fastapi import FastAPI
 
 from middleware.observability.correlation import CorrelationIdMiddleware
 from middleware.observability.logging import configure_logging
-from middleware.observability.metrics import MetricsCollector, MetricsMiddleware
+from middleware.observability.metrics import (
+    MetricsCollector,
+    MetricsMiddleware,
+    build_metrics_router,
+)
 
 SERVICE_NAME = os.environ.get("SERVICE_NAME", "catalog-service")
 
@@ -22,6 +26,7 @@ app = FastAPI(
 )
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(MetricsMiddleware, collector=metrics)
+app.include_router(build_metrics_router(metrics))
 
 
 @app.get("/")
