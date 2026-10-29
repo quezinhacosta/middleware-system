@@ -108,3 +108,38 @@ services:
       retries: 3
       start_period: 10s
 
+  notification-service:
+    container_name: notification-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn services.notification_service.main:app --host 0.0.0.0 --port 8002
+    # Porta interna: a consulta de notificacoes e feita pela rede interna (nao exposta no host)
+    expose:
+      - "8002"
+    environment:
+      - SERVICE_NAME=notification-service
+      - PORT=8002
+      - LOG_LEVEL=INFO
+      - AMQP_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@message-broker:5672/
+    depends_on:
+      message-broker:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8002/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
