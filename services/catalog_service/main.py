@@ -1,4 +1,13 @@
+import os
+
 from fastapi import FastAPI
+
+from middleware.observability.logging import configure_logging
+
+configure_logging(
+    service=os.environ.get("SERVICE_NAME", "catalog-service"),
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+)
 
 app = FastAPI(
     title="Catalog Service",
