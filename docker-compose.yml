@@ -5,7 +5,42 @@ networks:
     name: ecommerce-network
     driver: bridge
 
+volumes:
+  rabbitmq_data:
+    name: rabbitmq_data
+
 services:
+  message-broker:
+    container_name: message-broker
+    image: rabbitmq:3-management-alpine
+    # AMQP (5672) fica acessivel apenas na rede interna; o painel (15672) e exposto no host
+    expose:
+      - "5672"
+    ports:
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:?Defina RABBITMQ_DEFAULT_USER no arquivo .env}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:?Defina RABBITMQ_DEFAULT_PASS no arquivo .env}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
   order-service:
     container_name: order-service
     build:
@@ -19,7 +54,11 @@ services:
       - SERVICE_NAME=order-service
       - PORT=8000
       - CATALOG_SERVICE_URL=http://catalog-service:8001
+      - AMQP_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@message-broker:5672/
       - LOG_LEVEL=INFO
+    depends_on:
+      message-broker:
+        condition: service_healthy
     networks:
       - ecommerce-network
     restart: unless-stopped
