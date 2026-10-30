@@ -5,7 +5,41 @@ networks:
     name: ecommerce-network
     driver: bridge
 
+volumes:
+  rabbitmq_data:
+    name: rabbitmq_data
+
 services:
+  message-broker:
+    container_name: message-broker
+    image: rabbitmq:3-management-alpine
+    expose:
+      - "5672"
+    ports:
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:?Defina RABBITMQ_DEFAULT_USER no arquivo .env}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:?Defina RABBITMQ_DEFAULT_PASS no arquivo .env}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
   order-service:
     container_name: order-service
     build:
@@ -13,13 +47,13 @@ services:
       dockerfile: Dockerfile
     command: uvicorn services.order_service.main:app --host 0.0.0.0 --port 8000
     ports:
-      # Ponto de entrada do cliente/gateway exposto para o host
       - "8000:8000"
     environment:
       - SERVICE_NAME=order-service
       - PORT=8000
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - AMQP_URL=amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@message-broker:5672/
       - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
       - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
       - RABBITMQ_USER=${RABBITMQ_USER:-guest}
@@ -32,6 +66,9 @@ services:
       - CIRCUIT_BREAKER_FAILURE_THRESHOLD=${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
       - ORDER_SERVICE_URL=${ORDER_SERVICE_URL:-http://order-service:8000}
       - CATALOG_SERVICE_URL=${CATALOG_SERVICE_URL:-http://catalog-service:8001}
+    depends_on:
+      message-broker:
+        condition: service_healthy
     networks:
       - ecommerce-network
     restart: unless-stopped
@@ -56,7 +93,6 @@ services:
       context: .
       dockerfile: Dockerfile
     command: uvicorn services.catalog_service.main:app --host 0.0.0.0 --port 8001
-    # Porta interna acessivel apenas pelos containers da rede ecommerce-network (nao exposta no host)
     expose:
       - "8001"
     environment:
