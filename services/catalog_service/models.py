@@ -11,7 +11,9 @@ class Product(BaseModel):
 
 
 class ReserveRequest(BaseModel):
-    quantity: int = Field(gt=0, description="Quantidade a ser reservada deve ser maior que zero")
+    quantity: int = Field(
+        gt=0, description="Quantidade a ser reservada deve ser maior que zero"
+    )
 
 
 class ReserveResponse(BaseModel):

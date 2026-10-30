@@ -11,10 +11,27 @@ class ProductRepository:
 
     def _seed_data(self) -> None:
         seeds = [
-            Product(id="prod-001", name="Teclado Mecânico RGB", price=250.00, stock_quantity=15),
-            Product(id="prod-002", name="Mouse Sem Fio Ergoclick", price=120.00, stock_quantity=30),
-            Product(id="prod-003", name="Monitor Ultrawide 29", price=1350.00, stock_quantity=5),
-            Product(id="prod-004", name="Headset Gamer 7.1", price=320.00, stock_quantity=0),
+            Product(
+                id="prod-001",
+                name="Teclado Mecânico RGB",
+                price=250.00,
+                stock_quantity=15,
+            ),
+            Product(
+                id="prod-002",
+                name="Mouse Sem Fio Ergoclick",
+                price=120.00,
+                stock_quantity=30,
+            ),
+            Product(
+                id="prod-003",
+                name="Monitor Ultrawide 29",
+                price=1350.00,
+                stock_quantity=5,
+            ),
+            Product(
+                id="prod-004", name="Headset Gamer 7.1", price=320.00, stock_quantity=0
+            ),
         ]
         for product in seeds:
             self._products[product.id] = product
@@ -34,7 +51,9 @@ class ProductRepository:
         with self._lock:
             return self._products.get(product_id)
 
-    def reserve_stock(self, product_id: str, quantity: int) -> tuple[bool, Product | None, str]:
+    def reserve_stock(
+        self, product_id: str, quantity: int
+    ) -> tuple[bool, Product | None, str]:
         with self._lock:
             product = self._products.get(product_id)
             if not product:
