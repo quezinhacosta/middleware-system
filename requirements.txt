@@ -18,4 +18,3 @@ PyJWT[crypto]>=2.8.0,<3.0.0
 # Observabilidade e Métricas
 prometheus-client>=0.20.0,<1.0.0
 python-json-logger>=2.0.7,<3.0.0
-
