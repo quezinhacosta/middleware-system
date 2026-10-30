@@ -1,6 +1,7 @@
-import random 
+import random
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 
 def process_payment(order_data: dict) -> dict:
     # Simula o processamento bancário com latência e regras para PIX, cartão e boleto
@@ -22,7 +23,7 @@ def process_payment(order_data: dict) -> dict:
         "payment_id": f"pay_{random.randint(100000, 999999)}",
         "status": status,
         "payment_method": payment_method,
-        "processed_at": datetime.now(timezone.utc).isoformat()
+        "processed_at": datetime.now(UTC).isoformat(),
     }
 
     return result_event
