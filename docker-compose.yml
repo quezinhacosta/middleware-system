@@ -13,7 +13,6 @@ services:
       dockerfile: Dockerfile
     command: uvicorn services.order_service.main:app --host 0.0.0.0 --port 8000
     ports:
-      # Ponto de entrada do cliente/gateway exposto para o host
       - "8000:8000"
     environment:
       - SERVICE_NAME=order-service
@@ -44,7 +43,6 @@ services:
       context: .
       dockerfile: Dockerfile
     command: uvicorn services.catalog_service.main:app --host 0.0.0.0 --port 8001
-    # Porta interna acessivel apenas pelos containers da rede ecommerce-network (nao exposta no host)
     expose:
       - "8001"
     environment:
@@ -68,22 +66,30 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-    
-    rabbitmq:
+
+  rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - "5672:5672"   # Porta usada pelas aplicações para enviar/receber mensagens (AMQP)
-      - "15672:15672" # Porta da interface web de gerenciamento
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
 
-    payment-service:
-      build: ./services/payment-service
-      container_name: payment-service
-      environment:
-        - RABBITMQ_HOST=rabbitmq
-      depends_on:
-        - rabbitmq
-
+  payment-service:
+    container_name: payment-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python services/payment-service/main.py
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+    networks:
+      - ecommerce-network
+    depends_on:
+      - rabbitmq
+    restart: unless-stopped

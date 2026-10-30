@@ -13,7 +13,7 @@ def process_payment(order_data: dict) -> dict:
     time.sleep(latency)
 
     # 2. Taxa de sucesso controlada (ex: 85% de aprovação genérica)
-    success = random.rando() < 0.85
+    success = random.random() < 0.85
     status = "payment.approved" if success else "payment.rejected"
 
     # 3. Montar o schema de saída exigido
