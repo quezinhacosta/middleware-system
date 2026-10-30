@@ -1,4 +1,20 @@
+import logging
+import sys
+
 from fastapi import FastAPI
+from pydantic import ValidationError
+
+from middleware.config import Settings, get_settings
+
+logger = logging.getLogger("catalog-service")
+
+try:
+    settings: Settings = get_settings()
+except ValidationError as exc:
+    logger.critical(
+        f"[FATAL] Erro ao carregar configuracoes obrigatorias do catalog-service: {exc}"
+    )
+    sys.exit(1)
 
 app = FastAPI(
     title="Catalog Service",
@@ -9,9 +25,16 @@ app = FastAPI(
 
 @app.get("/")
 def read_root() -> dict[str, str]:
-    return {"service": "catalog-service", "status": "running"}
+    return {
+        "service": settings.SERVICE_NAME,
+        "status": "running",
+        "environment": settings.ENVIRONMENT,
+    }
 
 
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
-    return {"status": "healthy", "service": "catalog-service"}
+    return {
+        "status": "healthy",
+        "service": settings.SERVICE_NAME,
+    }

@@ -13,7 +13,6 @@ services:
   message-broker:
     container_name: message-broker
     image: rabbitmq:3-management-alpine
-    # AMQP (5672) fica acessivel apenas na rede interna; o painel (15672) e exposto no host
     expose:
       - "5672"
     ports:
@@ -48,14 +47,25 @@ services:
       dockerfile: Dockerfile
     command: uvicorn services.order_service.main:app --host 0.0.0.0 --port 8000
     ports:
-      # Ponto de entrada do cliente/gateway exposto para o host
       - "8000:8000"
     environment:
       - SERVICE_NAME=order-service
       - PORT=8000
-      - CATALOG_SERVICE_URL=http://catalog-service:8001
-      - AMQP_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@message-broker:5672/
-      - LOG_LEVEL=INFO
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - AMQP_URL=amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@message-broker:5672/
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-super-secret-distributed-middleware-key-change-in-production-2026}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
+      - HTTP_TIMEOUT_SECONDS=${HTTP_TIMEOUT_SECONDS:-3.0}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL:-http://order-service:8000}
+      - CATALOG_SERVICE_URL=${CATALOG_SERVICE_URL:-http://catalog-service:8001}
     depends_on:
       message-broker:
         condition: service_healthy
@@ -83,13 +93,25 @@ services:
       context: .
       dockerfile: Dockerfile
     command: uvicorn services.catalog_service.main:app --host 0.0.0.0 --port 8001
-    # Porta interna acessivel apenas pelos containers da rede ecommerce-network (nao exposta no host)
     expose:
       - "8001"
     environment:
       - SERVICE_NAME=catalog-service
       - PORT=8001
-      - LOG_LEVEL=INFO
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-super-secret-distributed-middleware-key-change-in-production-2026}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
+      - HTTP_TIMEOUT_SECONDS=${HTTP_TIMEOUT_SECONDS:-3.0}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL:-http://order-service:8000}
+      - CATALOG_SERVICE_URL=${CATALOG_SERVICE_URL:-http://catalog-service:8001}
     networks:
       - ecommerce-network
     restart: unless-stopped
@@ -107,4 +129,3 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-
