@@ -68,4 +68,22 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    
+    rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # Porta usada pelas aplicações para enviar/receber mensagens (AMQP)
+      - "15672:15672" # Porta da interface web de gerenciamento
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+    payment-service:
+      build: ./services/payment-service
+      container_name: payment-service
+      environment:
+        - RABBITMQ_HOST=rabbitmq
+      depends_on:
+        - rabbitmq
 
