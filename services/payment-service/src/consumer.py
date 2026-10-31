@@ -6,9 +6,20 @@ import pika
 from src.processor import process_payment
 from src.publisher import publish_event
 
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
-QUEUE_NAME = "order.created"
 
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "message-broker")
+RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))
+RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
+RABBITMQ_PASS = os.getenv("RABBITMQ_PASS", "guest")
+
+credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
+parameters = pika.ConnectionParameters(
+    host=RABBITMQ_HOST,
+    port=RABBITMQ_PORT,
+    credentials=credentials
+)
+
+QUEUE_NAME = "order.created"
 
 def callback(ch, method, properties, body):
     """
@@ -44,9 +55,7 @@ def start_consuming():
     while True:
         try:
             print(f" [*] Tentando conectar ao RabbitMQ em {RABBITMQ_HOST}...")
-            connection = pika.BlockingConnection(
-                pika.ConnectionParameters(host=RABBITMQ_HOST)
-            )
+            connection = pika.BlockingConnection(parameters)
             channel = connection.channel()
 
             # Declara a fila para garantir que ela existe
