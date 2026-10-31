@@ -11,6 +11,7 @@ Variáveis de ambiente:
 from __future__ import annotations
 
 import os
+import threading  
 import time
 import uuid
 from dataclasses import dataclass
@@ -19,11 +20,12 @@ from typing import Iterable
 
 import jwt
 
+SERVICE_KEY_HEADER = "X-Internal-Service-Key"  
 ALGORITHM = "HS256"
 DEFAULT_TTL_SECONDS = 60
 LEEWAY_SECONDS = 5
 MIN_SECRET_BYTES = 32
-
+REFRESH_MARGIN_SECONDS = 10  
 
 class ServiceAuthConfigError(RuntimeError):
     """Configuração inválida (ex.: segredo ausente ou fraco). Falha rápido no startup."""
@@ -91,6 +93,29 @@ class ServiceAuthenticator:
         return ServiceIdentity(service=issuer, token_id=claims["jti"])
 
 
+class ServiceTokenProvider:
+    """Lado cliente: mantém token em cache por audiência para não assinar a cada chamada."""
+
+    def __init__(self, service_name: str, authenticator: ServiceAuthenticator) -> None:
+        self._service_name = service_name
+        self._auth = authenticator
+        self._cache: dict[str, tuple[str, int]] = {}
+        self._lock = threading.Lock()
+
+    def get_token(self, audience: str) -> str:
+        now = time.time()
+        with self._lock:
+            cached = self._cache.get(audience)
+            if cached and cached[1] - now > REFRESH_MARGIN_SECONDS:
+                return cached[0]
+            token, exp = self._auth.generate_token(self._service_name, audience)
+            self._cache[audience] = (token, exp)
+            return token
+
+    def auth_headers(self, audience: str) -> dict[str, str]:
+        return {SERVICE_KEY_HEADER: self.get_token(audience)}
+
+    
 @lru_cache(maxsize=1)
 def get_authenticator() -> ServiceAuthenticator:
     """Singleton lido do ambiente. Chame no startup para falhar rápido."""

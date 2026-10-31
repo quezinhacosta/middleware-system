@@ -16,3 +16,8 @@ def _env(monkeypatch):
 def test_weak_secret_fails_fast():
     with pytest.raises(sa.ServiceAuthConfigError):
         sa.ServiceAuthenticator("curto")
+
+
+def test_provider_caches_token_until_near_expiry():
+    provider = sa.ServiceTokenProvider("order-service", sa.get_authenticator())
+    assert provider.get_token("catalog-service") == provider.get_token("catalog-service")
