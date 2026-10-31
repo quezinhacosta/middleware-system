@@ -7,7 +7,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [
     { name = "Quezia Costa" },
-    { name = "Lettyicia" },
+    { name = "Lettycia" },
     { name = "Lucas Mendes" },
     { name = "João Victor" },
 ]
