@@ -10,17 +10,21 @@ Variáveis de ambiente:
 """
 from __future__ import annotations
 
+import logging   
 import os
-import threading  
+import threading
 import time
 import uuid
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Iterable
+from typing import Callable, Iterable   
 
 import jwt
+from fastapi import Header, HTTPException, status   # novo
 
-SERVICE_KEY_HEADER = "X-Internal-Service-Key"  
+logger = logging.getLogger(__name__)   # novo
+
+SERVICE_KEY_HEADER = "X-Internal-Service-Key"
 ALGORITHM = "HS256"
 DEFAULT_TTL_SECONDS = 60
 LEEWAY_SECONDS = 5
@@ -123,3 +127,36 @@ def get_authenticator() -> ServiceAuthenticator:
         secret=os.environ.get("INTERNAL_SERVICE_SECRET", ""),
         ttl_seconds=int(os.environ.get("INTERNAL_TOKEN_TTL", DEFAULT_TTL_SECONDS)),
     )
+
+def require_internal_service(
+    audience: str,
+    allowed_callers: Iterable[str] | None = None,
+) -> Callable[..., ServiceIdentity]:
+    """Dependência FastAPI. Uso:
+        Depends(require_internal_service("catalog-service", {"order-service"}))
+    401 -> credencial ausente/inválida/expirada; 403 -> chamador não autorizado.
+    """
+    callers = frozenset(allowed_callers) if allowed_callers is not None else None
+
+    def dependency(
+        x_internal_service_key: str | None = Header(default=None, alias=SERVICE_KEY_HEADER),
+    ) -> ServiceIdentity:
+        if not x_internal_service_key:
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, "Credencial de serviço ausente"
+            )
+        try:
+            return get_authenticator().validate_token(
+                x_internal_service_key, audience, callers
+            )
+        except ServiceForbiddenError as exc:
+            logger.warning("S2S negado (403): %s", exc)
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Serviço não autorizado")
+        except ServiceAuthError as exc:
+            # Motivo detalhado só no log; a resposta é genérica. Nunca logar o token.
+            logger.warning("S2S rejeitado (401): %s", exc)
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, "Credencial de serviço inválida"
+            )
+
+    return dependency
