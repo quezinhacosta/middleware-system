@@ -7,7 +7,7 @@ Projeto prático desenvolvido para a disciplina de **Arquitetura de Sistemas Dis
 ##  Integrantes da Equipe
 
 * **Quezia Costa**
-* **Lettyicia**
+* **Lettycia França**
 * **Lucas Mendes**
 * **João Victor**
 
