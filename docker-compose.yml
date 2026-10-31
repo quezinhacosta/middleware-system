@@ -129,3 +129,17 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  payment-service:
+    container_name: payment-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python services/payment-service/main.py
+    environment:
+      - RABBITMQ_HOST=message-broker
+    networks:
+      - ecommerce-network
+    depends_on:
+      - message-broker
+    restart: unless-stopped
