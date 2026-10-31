@@ -3,14 +3,23 @@ import os
 
 import pika
 
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "message-broker")
+RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))
+RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
+RABBITMQ_PASS = os.getenv("RABBITMQ_PASS", "guest")
 
+credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
+parameters = pika.ConnectionParameters(
+    host=RABBITMQ_HOST,
+    port=RABBITMQ_PORT,
+    credentials=credentials
+)
 
 def publish_event(event_data: dict):
     """
     Publica o evento de resultado do pagamento no RabbitMQ.
     """
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+    connection = pika.BlockingConnection(parameters)
     channel = connection.channel()
 
     # Usaremos um exchange do tipo 'topic' ou uma fila direta dependendo da arquitetura.

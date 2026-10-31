@@ -28,17 +28,17 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.50'
+          cpus: '1.00'   # CORREÇÃO: com 0.50 o boot levou ~23s e cada healthcheck (que sobe uma VM Erlang) fica lento
           memory: 512M
         reservations:
           cpus: '0.10'
           memory: 128M
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 15s
-      timeout: 10s
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 20s
+      timeout: 15s
       retries: 5
-      start_period: 20s
+      start_period: 40s
 
   order-service:
     container_name: order-service
@@ -53,11 +53,11 @@ services:
       - PORT=8000
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - AMQP_URL=amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@message-broker:5672/
+      - AMQP_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@message-broker:5672/
       - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
       - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_PASS=${RABBITMQ_DEFAULT_PASS}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-super-secret-distributed-middleware-key-change-in-production-2026}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
@@ -81,11 +81,11 @@ services:
           cpus: '0.10'
           memory: 64M
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   catalog-service:
     container_name: catalog-service
@@ -102,8 +102,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
       - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
-      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
-      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_PASS=${RABBITMQ_DEFAULT_PASS}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-super-secret-distributed-middleware-key-change-in-production-2026}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
@@ -112,6 +112,9 @@ services:
       - CIRCUIT_BREAKER_FAILURE_THRESHOLD=${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
       - ORDER_SERVICE_URL=${ORDER_SERVICE_URL:-http://order-service:8000}
       - CATALOG_SERVICE_URL=${CATALOG_SERVICE_URL:-http://catalog-service:8001}
+    depends_on:
+      message-broker:
+        condition: service_healthy
     networks:
       - ecommerce-network
     restart: unless-stopped
@@ -124,11 +127,11 @@ services:
           cpus: '0.10'
           memory: 64M
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health/ready', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   payment-service:
     container_name: payment-service
@@ -136,10 +139,36 @@ services:
       context: .
       dockerfile: Dockerfile
     command: python services/payment-service/main.py
+    expose:
+      - "8002"
     environment:
-      - RABBITMQ_HOST=message-broker
+      - SERVICE_NAME=payment-service
+      - PORT=8002
+      # Permite importar "middleware.*" (raiz do projeto) mesmo rodando o script em services/payment-service/
+      - PYTHONPATH=.
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_PASS=${RABBITMQ_DEFAULT_PASS}
     networks:
       - ecommerce-network
     depends_on:
-      - message-broker
+      message-broker:
+        condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
