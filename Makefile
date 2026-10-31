@@ -39,7 +39,7 @@ format:
 	ruff format .
 
 test:
-	pytest
+	python -m pytest tests -v
 
 test-cov:
 	pytest --cov=middleware --cov=services --cov-report=term-missing
