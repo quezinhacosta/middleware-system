@@ -5,7 +5,7 @@ PYTHON ?= python3
 PIP ?= pip
 
 # Cobertura mínima exigida nos testes unitários do middleware
-COV_MIN ?= 60
+COV_MIN ?= 85
 
 help:
 	@echo "Comandos disponíveis no Makefile:"
