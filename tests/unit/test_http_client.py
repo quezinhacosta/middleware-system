@@ -119,11 +119,6 @@ async def test_timeout_de_fase_do_httpx_vira_middleware_timeout():
     assert exc.value.timeout == 1.5
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="o ramo httpx.TimeoutException não sanitiza a URL (vaza query string); "
-           "remover o xfail depois de corrigir",
-)
 async def test_timeout_de_fase_sanitiza_url():
     def handler(request):
         raise httpx.ReadTimeout("lento", request=request)

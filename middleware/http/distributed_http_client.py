@@ -3,7 +3,7 @@ import time
 import httpx
 
 from middleware.resilience.exceptions import MiddlewareTimeoutError
-from middleware.resilience.timeout import run_with_deadline
+from middleware.resilience.timeout import _sanitize_url, run_with_deadline
 from middleware.resilience.timeout_config import Criticality, get_timeout
 
 
@@ -51,7 +51,9 @@ class DistributedHttpClient:
             )
         except httpx.TimeoutException:
             raise MiddlewareTimeoutError(
-                url=url, timeout=limit, elapsed=time.perf_counter() - start
+                url=_sanitize_url(url),  # remove query string e credenciais
+                timeout=limit,
+                elapsed=time.perf_counter() - start,
             ) from None
 
     async def get_catalog(self, url: str, **kwargs) -> httpx.Response:
