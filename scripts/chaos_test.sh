@@ -170,12 +170,59 @@ preflight() {
   log INFO preflight_ok "Ambiente pronto para o teste de caos"
 }
 
+# ======================= CENÁRIO 1: catalog-service ==========================
+count_contingency_logs() { # <iso_timestamp>
+  dc logs --no-color --since "$1" order-service 2>/dev/null \
+    | grep -Eic "$CONTINGENCY_LOG_PATTERN" || true
+}
+
+order_healthy()   { [[ "$(http_status "$ORDER_HEALTH_URL")" == "200" ]]; }
+catalog_healthy() { [[ "$(http_status "$CATALOG_HEALTH_URL")" == "200" ]]; }
+
+scenario_1_catalog_failure() {
+  CURRENT_SCENARIO="cenario_1_catalog"
+  log INFO scenario_start "Queda forçada do catalog-service sob carga"
+
+  # 1) Baseline: sistema saudável antes da falha
+  local t_base; t_base="$(date +%s)"
+  sleep 5
+  assert "baseline: pedidos aceitos (2xx) antes da falha" has_success_since "$t_base" 3
+
+  # 2) Injeção da falha
+  local t_stop iso_stop
+  t_stop="$(date +%s)"; iso_stop="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  log WARN fault_injected "docker compose stop catalog-service"
+  dc stop catalog-service >/dev/null
+  sleep "$OUTAGE_SECONDS"
+
+  # 3) Evidências de contingência durante a falha
+  log INFO outage_traffic "Status HTTP durante a falha: $(status_summary "$t_stop")"
+  local evidence; evidence="$(count_contingency_logs "$iso_stop")"
+  log INFO contingency_evidence "Linhas de retry/circuit breaker/fallback no order-service: ${evidence}"
+  assert "order-service permaneceu saudável durante a falha" order_healthy
+  assert "nenhuma requisição ficou sem resposta (000) durante a falha" \
+    test "$(count_status "$t_stop" 000)" -eq 0
+  assert "logs comprovam retry/circuit breaker/fallback" test "$evidence" -gt 0
+
+  # 4) Recuperação (healing)
+  local t_start; t_start="$(date +%s)"
+  log WARN fault_removed "docker compose start catalog-service"
+  dc start catalog-service >/dev/null
+
+  assert "catalog-service voltou a responder /health" \
+    wait_until "$RECOVERY_TIMEOUT" catalog_healthy
+  assert "pedidos voltaram a ser aceitos (circuit breaker fechou)" \
+    wait_until "$RECOVERY_TIMEOUT" has_success_since "$t_start" 3
+  log INFO healed "Recuperação em $(( $(date +%s) - t_start ))s"
+  log INFO scenario_end "Cenário 1 concluído"
+}
+
 # =============================== MAIN ========================================
 main() {
   preflight
   traffic_start
-  sleep 3
-  log INFO smoke "Status do tráfego: $(status_summary 0)"
-  exit 0
+  scenario_1_catalog_failure
+  log INFO summary "Falhas até agora: ${FAILURES}"
+  exit $(( FAILURES > 0 ? 1 : 0 ))
 }
 main "$@"
