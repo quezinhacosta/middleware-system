@@ -217,12 +217,64 @@ scenario_1_catalog_failure() {
   log INFO scenario_end "Cenário 1 concluído"
 }
 
+# ======================= CENÁRIO 2: payment-service ==========================
+queue_drained() { [[ "$(queue_field messages)" == "0" ]]; }
+has_consumers() { [[ "$(queue_field consumers)" -ge 1 ]]; }
+
+scenario_2_payment_failure() {
+  CURRENT_SCENARIO="cenario_2_payment"
+  log INFO scenario_start "Queda do payment-service enquanto pedidos são fechados"
+
+  assert "fila ${PAYMENT_QUEUE} é durável (sobrevive a restart do broker)" \
+    test "$(queue_field durable)" = "true"
+
+  local baseline; baseline="$(queue_field messages)"
+  local t_stop; t_stop="$(date +%s)"
+  log WARN fault_injected "docker compose stop payment-service (fila baseline=${baseline})"
+  dc stop payment-service >/dev/null
+  sleep "$OUTAGE_SECONDS"
+  sleep 6   # a API de management do RabbitMQ atualiza estatísticas a cada ~5s
+
+  # Para o tráfego para a fila poder ser drenada com contagem estável
+  traffic_stop
+  local accepted accumulated
+  accepted="$(count_success "$t_stop")"
+  accumulated="$(queue_field messages)"
+  log INFO queue_state "Pedidos aceitos=${accepted}; mensagens na fila=${accumulated} (baseline=${baseline})"
+
+  assert "order-service seguiu saudável com o pagamento fora" order_healthy
+  assert "mensagens retidas na fila (crescimento sobre o baseline)" \
+    test "$accumulated" -gt "$baseline"
+  assert "fila sem consumidores durante a falha" \
+    test "$(queue_field consumers)" -eq 0
+
+  # Recuperação: consumo retardado
+  local t_start; t_start="$(date +%s)"
+  log WARN fault_removed "docker compose start payment-service"
+  dc start payment-service >/dev/null
+
+  assert "payment-service reconectou como consumidor" \
+    wait_until "$RECOVERY_TIMEOUT" has_consumers
+  assert "fila drenada: todas as mensagens retidas foram consumidas" \
+    wait_until "$RECOVERY_TIMEOUT" queue_drained
+  log INFO healed "Fila drenada em $(( $(date +%s) - t_start ))s"
+  log INFO scenario_end "Cenário 2 concluído"
+}
+
+print_summary() {
+  CURRENT_SCENARIO="summary"
+  local verdict="PASS"; (( FAILURES > 0 )) && verdict="FAIL"
+  log INFO summary "Resultado=${verdict}; asserts_falhos=${FAILURES}; log=${LOG_FILE}"
+}
+
 # =============================== MAIN ========================================
 main() {
   preflight
   traffic_start
   scenario_1_catalog_failure
-  log INFO summary "Falhas até agora: ${FAILURES}"
+  scenario_2_payment_failure
+  traffic_stop
+  print_summary
   exit $(( FAILURES > 0 ? 1 : 0 ))
 }
 main "$@"
