@@ -3,11 +3,13 @@ import time
 
 import pika
 import pytest
+from dotenv import load_dotenv
 
 from middleware.transport.consumer import Topology, declare_topology
-
-# Importa a fixture stack se ela estiver definida em test_stack
 from tests.integrations.test_stack import stack  # noqa: F401
+
+# Garante que as variáveis do .env sejam injetadas no processo do Pytest
+load_dotenv()
 
 
 @pytest.fixture
@@ -16,6 +18,7 @@ def rabbitmq_channel(stack):  # noqa: F811
     password = os.getenv("RABBITMQ_DEFAULT_PASS", "guest")
     host = os.getenv("RABBITMQ_HOST", "localhost")
     port = int(os.getenv("RABBITMQ_PORT", "5672"))
+
     credentials = pika.PlainCredentials(user, password)
     parameters = pika.ConnectionParameters(
         host=host, port=port, credentials=credentials
@@ -27,6 +30,11 @@ def rabbitmq_channel(stack):  # noqa: F811
         try:
             connection = pika.BlockingConnection(parameters)
             break
+        except pika.exceptions.ProbableAuthenticationError as e:
+            # Falha imediatamente se a senha estiver incorreta (evita esperar 45s)
+            pytest.fail(
+                f"Erro de autenticação no RabbitMQ (usuário/senha do .env estão corretos?): {e}"
+            )
         except (pika.exceptions.AMQPConnectionError, ConnectionRefusedError, OSError):
             time.sleep(2)
 
