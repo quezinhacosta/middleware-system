@@ -2,6 +2,7 @@ import threading
 import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import cast
 
 import pytest
 
@@ -57,7 +58,7 @@ def breaker(request):
 
 def fetch_products(url: str) -> bytes:
     with urllib.request.urlopen(url, timeout=1) as resp:
-        return resp.read()
+        return cast(bytes, resp.read())
 
 
 def trip(breaker, catalog):
@@ -161,8 +162,10 @@ def test_apenas_um_canario_em_half_open_sob_concorrencia(breaker):
             rejected.append(1)
 
     threads = [threading.Thread(target=worker) for _ in range(20)]
-    [t.start() for t in threads]
-    [t.join() for t in threads]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
 
     assert len(executed) == 1
     assert len(rejected) == 19

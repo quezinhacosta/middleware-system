@@ -3,8 +3,9 @@ import sys
 
 from fastapi import FastAPI
 from pydantic import ValidationError
-from middleware.observability.health import router as health_router
+
 from middleware.config import Settings, get_settings
+from middleware.observability.health import router as health_router
 
 logger = logging.getLogger("order-service")
 
@@ -23,6 +24,7 @@ app = FastAPI(
 )
 
 app.include_router(health_router)
+
 
 @app.get("/")
 def read_root() -> dict[str, str]:

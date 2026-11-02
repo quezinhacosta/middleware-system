@@ -6,7 +6,6 @@ import pika
 from src.processor import process_payment
 from src.publisher import publish_event
 
-
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "message-broker")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
@@ -14,12 +13,11 @@ RABBITMQ_PASS = os.getenv("RABBITMQ_PASS", "guest")
 
 credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
 parameters = pika.ConnectionParameters(
-    host=RABBITMQ_HOST,
-    port=RABBITMQ_PORT,
-    credentials=credentials
+    host=RABBITMQ_HOST, port=RABBITMQ_PORT, credentials=credentials
 )
 
 QUEUE_NAME = "order.created"
+
 
 def callback(ch, method, properties, body):
     """
