@@ -6,9 +6,12 @@ import pytest
 
 from middleware.transport.consumer import Topology, declare_topology
 
+# Importa a fixture stack se ela estiver definida em test_stack
+from tests.integrations.test_stack import stack  # noqa: F401
+
 
 @pytest.fixture
-def rabbitmq_channel():
+def rabbitmq_channel(stack):  # noqa: F811
     user = os.getenv("RABBITMQ_DEFAULT_USER", "guest")
     password = os.getenv("RABBITMQ_DEFAULT_PASS", "guest")
     host = os.getenv("RABBITMQ_HOST", "localhost")
@@ -19,7 +22,7 @@ def rabbitmq_channel():
     )
 
     connection = None
-    deadline = time.time() + 45  # espera até 45s pelo broker subir no CI
+    deadline = time.time() + 45
     while time.time() < deadline:
         try:
             connection = pika.BlockingConnection(parameters)
