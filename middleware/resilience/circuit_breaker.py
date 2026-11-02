@@ -5,8 +5,9 @@ import inspect
 import logging
 import threading
 import time
+from collections.abc import Awaitable, Callable
 from enum import IntEnum
-from typing import Any, Awaitable, Callable, Tuple, Type, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class CircuitBreaker:
         name: str,
         failure_threshold: int = 5,
         recovery_timeout: float = 10.0,
-        expected_exceptions: Tuple[Type[BaseException], ...] = (Exception,),
+        expected_exceptions: tuple[type[BaseException], ...] = (Exception,),
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if failure_threshold < 1:
@@ -192,7 +193,10 @@ class CircuitBreaker:
             return
         logger.warning(
             "circuit_breaker=%s transition=%s->%s failures=%d",
-            self.name, self._state.name, new_state.name, self._failures,
+            self.name,
+            self._state.name,
+            new_state.name,
+            self._failures,
         )
         self._state = new_state
         self._publish_metric()

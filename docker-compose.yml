@@ -134,41 +134,41 @@ services:
       start_period: 15s
 
   payment-service:
-    container_name: payment-service
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: python services/payment-service/main.py
-    expose:
-      - "8002"
-    environment:
-      - SERVICE_NAME=payment-service
-      - PORT=8002
-      # Permite importar "middleware.*" (raiz do projeto) mesmo rodando o script em services/payment-service/
-      - PYTHONPATH=.
-      - ENVIRONMENT=${ENVIRONMENT:-development}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
-      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
-      - RABBITMQ_USER=${RABBITMQ_DEFAULT_USER}
-      - RABBITMQ_PASS=${RABBITMQ_DEFAULT_PASS}
-    networks:
-      - ecommerce-network
-    depends_on:
-      message-broker:
-        condition: service_healthy
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 256M
-        reservations:
-          cpus: '0.10'
-          memory: 64M
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health/ready', timeout=3)"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
+      container_name: payment-service
+      build:
+        context: .
+        dockerfile: Dockerfile
+      command: python services/payment_service/main.py
+      expose:
+        - "8002"
+      environment:
+        - SERVICE_NAME=payment-service
+        - PORT=8002
+        # Permite importar "middleware.*" (raiz do projeto) mesmo rodando o script em services/payment_service/
+        - PYTHONPATH=.
+        - ENVIRONMENT=${ENVIRONMENT:-development}
+        - LOG_LEVEL=${LOG_LEVEL:-INFO}
+        - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
+        - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+        - RABBITMQ_USER=${RABBITMQ_DEFAULT_USER}
+        - RABBITMQ_PASS=${RABBITMQ_DEFAULT_PASS}
+      networks:
+        - ecommerce-network
+      depends_on:
+        message-broker:
+          condition: service_healthy
+      restart: unless-stopped
+      deploy:
+        resources:
+          limits:
+            cpus: '0.50'
+            memory: 256M
+          reservations:
+            cpus: '0.10'
+            memory: 64M
+      healthcheck:
+        test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health/ready', timeout=3)"]
+        interval: 15s
+        timeout: 5s
+        retries: 3
+        start_period: 15s

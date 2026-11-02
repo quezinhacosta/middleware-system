@@ -1,19 +1,18 @@
 import asyncio
 import json
-import threading
 import time
+
 import httpx
 import pytest
 from fastapi import FastAPI
-
-
 from fastapi.testclient import TestClient
 
+from middleware.http.distributed_http_client import DistributedHttpClient
 from middleware.resilience.exceptions import MiddlewareTimeoutError
 from middleware.resilience.handlers import register_timeout_handler
 from middleware.resilience.timeout import with_timeout
 from middleware.resilience.timeout_config import Criticality
-from middleware.http.distributed_http_client import DistributedHttpClient
+
 
 @pytest.mark.asyncio
 async def test_async_call_is_cancelled_at_deadline():
@@ -32,8 +31,8 @@ async def test_async_call_is_cancelled_at_deadline():
         await slow("http://catalog/products/1")
     elapsed = time.perf_counter() - start
 
-    assert 1.0 <= elapsed < 1.5          # não esperou os 3s
-    assert cancelled.is_set()             # corrotina foi realmente cancelada
+    assert 1.0 <= elapsed < 1.5  # não esperou os 3s
+    assert cancelled.is_set()  # corrotina foi realmente cancelada
     assert exc.value.url == "http://catalog/products/1"
 
 
@@ -75,12 +74,12 @@ def test_route_returns_504_with_json_log(caplog):
 
     assert resp.status_code == 504
     assert resp.json()["error"] == "gateway_timeout"
-    assert 0.9 <= elapsed < 1.5     
+    assert 0.9 <= elapsed < 1.5
 
     log = json.loads(caplog.records[-1].message)
     assert log["event"] == "middleware_timeout"
-    assert log["url"] == "http://catalog:8000/products/1"  
-    assert 900 <= log["duration_ms"] < 1500                
+    assert log["url"] == "http://catalog:8000/products/1"
+    assert 900 <= log["duration_ms"] < 1500
 
 
 @pytest.mark.asyncio
@@ -105,13 +104,13 @@ async def test_invalid_env_falls_back_to_default(monkeypatch):
     async def fast():
         return "ok"
 
-    assert await fast() == "ok"   # default 5.0s, sem quebrar
+    assert await fast() == "ok"  # default 5.0s, sem quebrar
 
 
 @pytest.mark.asyncio
 async def test_http_client_aborts_slow_request():
     async def slow_handler(request: httpx.Request) -> httpx.Response:
-        await asyncio.sleep(3)                      # serviço lento simulado
+        await asyncio.sleep(3)  # serviço lento simulado
         return httpx.Response(200, json={"ok": True})
 
     transport = httpx.MockTransport(slow_handler)
@@ -123,5 +122,5 @@ async def test_http_client_aborts_slow_request():
             await http.request(
                 "GET", "http://catalog:8000/products/1", timeout_override=None
             ) if False else await http.get_catalog("http://catalog:8000/products/1")
-    assert time.perf_counter() - start < 2.0        # catálogo = 1.5s, não 3s
+    assert time.perf_counter() - start < 2.0  # catálogo = 1.5s, não 3s
     assert exc.value.url == "http://catalog:8000/products/1"

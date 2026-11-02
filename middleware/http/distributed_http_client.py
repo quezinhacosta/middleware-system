@@ -3,7 +3,7 @@ import time
 import httpx
 
 from middleware.resilience.exceptions import MiddlewareTimeoutError
-from middleware.resilience.timeout import run_with_deadline
+from middleware.resilience.timeout import _sanitize_url, run_with_deadline
 from middleware.resilience.timeout_config import Criticality, get_timeout
 
 
@@ -18,7 +18,7 @@ class DistributedHttpClient:
         self,
         *,
         default_headers: dict[str, str] | None = None,
-        client: httpx.AsyncClient | None = None,   # injetável para testes
+        client: httpx.AsyncClient | None = None,  # injetável para testes
         max_connections: int = 100,
     ) -> None:
         self._client = client or httpx.AsyncClient(
@@ -34,7 +34,6 @@ class DistributedHttpClient:
         self,
         method: str,
         url: str,
-        *,
         criticality: Criticality = Criticality.DEFAULT,
         **kwargs,
     ) -> httpx.Response:
@@ -51,14 +50,18 @@ class DistributedHttpClient:
             )
         except httpx.TimeoutException:
             raise MiddlewareTimeoutError(
-                url=url, timeout=limit, elapsed=time.perf_counter() - start
+                url=_sanitize_url(url),  # remove query string e credenciais
+                timeout=limit,
+                elapsed=time.perf_counter() - start,
             ) from None
 
     async def get_catalog(self, url: str, **kwargs) -> httpx.Response:
         return await self.request("GET", url, criticality=Criticality.CATALOG, **kwargs)
 
     async def authorize_payment(self, url: str, **kwargs) -> httpx.Response:
-        return await self.request("POST", url, criticality=Criticality.PAYMENT, **kwargs)
+        return await self.request(
+            "POST", url, criticality=Criticality.PAYMENT, **kwargs
+        )
 
     async def aclose(self) -> None:
         await self._client.aclose()

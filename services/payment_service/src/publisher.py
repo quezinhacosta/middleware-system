@@ -10,10 +10,9 @@ RABBITMQ_PASS = os.getenv("RABBITMQ_PASS", "guest")
 
 credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
 parameters = pika.ConnectionParameters(
-    host=RABBITMQ_HOST,
-    port=RABBITMQ_PORT,
-    credentials=credentials
+    host=RABBITMQ_HOST, port=RABBITMQ_PORT, credentials=credentials
 )
+
 
 def publish_event(event_data: dict):
     """
