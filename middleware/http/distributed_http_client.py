@@ -34,7 +34,6 @@ class DistributedHttpClient:
         self,
         method: str,
         url: str,
-        *,
         criticality: Criticality = Criticality.DEFAULT,
         **kwargs,
     ) -> httpx.Response:

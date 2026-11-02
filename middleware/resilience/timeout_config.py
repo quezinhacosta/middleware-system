@@ -6,7 +6,7 @@ from enum import StrEnum
 logger = logging.getLogger(__name__)
 
 
-class Criticality(str, StrEnum):
+class Criticality(StrEnum):
     CATALOG = "catalog"
     PAYMENT = "payment"
     DEFAULT = "default"
