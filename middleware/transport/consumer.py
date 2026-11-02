@@ -233,7 +233,7 @@ class EventConsumer(ABC):
         return envelope
 
     def _backoff(self, attempt: int) -> float:
-        return min(self._backoff_base * (2 ** (attempt - 1)), self._backoff_max)
+            return float(min(self._backoff_base * (2 ** (attempt - 1)), self._backoff_max))
 
     def _dead_letter(
         self, ch: Any, tag: int, *, reason: str, attempts: int, error: BaseException
