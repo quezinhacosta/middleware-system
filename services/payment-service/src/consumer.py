@@ -6,7 +6,6 @@ import pika
 from src.processor import process_payment
 from src.publisher import publish_event
 
-
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "message-broker")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")

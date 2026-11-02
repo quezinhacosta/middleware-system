@@ -6,9 +6,10 @@ import json
 import logging
 import os
 import time
+from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from typing import Any, Awaitable, Callable, TypeVar
+from typing import Any, TypeVar
 from urllib.parse import urlsplit
 
 from .exceptions import MiddlewareTimeoutError
@@ -76,7 +77,7 @@ async def run_with_deadline(
     start = time.perf_counter()
     try:
         return await asyncio.wait_for(coro, timeout=seconds)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise _timeout_error(
             url=url, limit=seconds, start=start, operation=operation
         ) from None

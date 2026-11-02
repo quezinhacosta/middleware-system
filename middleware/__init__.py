@@ -3,5 +3,5 @@ from .resilience.circuit_breaker import (
     CircuitBreakerOpenException,
     CircuitState,
 )
- 
+
 __all__ = ["CircuitBreaker", "CircuitBreakerOpenException", "CircuitState"]

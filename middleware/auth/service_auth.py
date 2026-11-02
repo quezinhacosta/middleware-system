@@ -10,17 +10,17 @@ Variáveis de ambiente:
 """
 from __future__ import annotations
 
-import logging   
+import logging
 import os
 import threading
 import time
 import uuid
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Callable, Iterable   
 
 import jwt
-from fastapi import Header, HTTPException, status   # novo
+from fastapi import Header, HTTPException, status  # novo
 
 logger = logging.getLogger(__name__)   # novo
 
@@ -29,7 +29,7 @@ ALGORITHM = "HS256"
 DEFAULT_TTL_SECONDS = 60
 LEEWAY_SECONDS = 5
 MIN_SECRET_BYTES = 32
-REFRESH_MARGIN_SECONDS = 10  
+REFRESH_MARGIN_SECONDS = 10
 
 class ServiceAuthConfigError(RuntimeError):
     """Configuração inválida (ex.: segredo ausente ou fraco). Falha rápido no startup."""
@@ -119,7 +119,7 @@ class ServiceTokenProvider:
     def auth_headers(self, audience: str) -> dict[str, str]:
         return {SERVICE_KEY_HEADER: self.get_token(audience)}
 
-    
+
 @lru_cache(maxsize=1)
 def get_authenticator() -> ServiceAuthenticator:
     """Singleton lido do ambiente. Chame no startup para falhar rápido."""
@@ -151,12 +151,12 @@ def require_internal_service(
             )
         except ServiceForbiddenError as exc:
             logger.warning("S2S negado (403): %s", exc)
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Serviço não autorizado")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Serviço não autorizado") from exc
         except ServiceAuthError as exc:
             # Motivo detalhado só no log; a resposta é genérica. Nunca logar o token.
             logger.warning("S2S rejeitado (401): %s", exc)
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED, "Credencial de serviço inválida"
-            )
+            ) from exc
 
     return dependency

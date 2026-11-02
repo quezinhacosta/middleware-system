@@ -1,19 +1,18 @@
 import asyncio
 import json
-import threading
 import time
+
 import httpx
 import pytest
 from fastapi import FastAPI
-
-
 from fastapi.testclient import TestClient
 
+from middleware.http.distributed_http_client import DistributedHttpClient
 from middleware.resilience.exceptions import MiddlewareTimeoutError
 from middleware.resilience.handlers import register_timeout_handler
 from middleware.resilience.timeout import with_timeout
 from middleware.resilience.timeout_config import Criticality
-from middleware.http.distributed_http_client import DistributedHttpClient
+
 
 @pytest.mark.asyncio
 async def test_async_call_is_cancelled_at_deadline():
@@ -75,12 +74,12 @@ def test_route_returns_504_with_json_log(caplog):
 
     assert resp.status_code == 504
     assert resp.json()["error"] == "gateway_timeout"
-    assert 0.9 <= elapsed < 1.5     
+    assert 0.9 <= elapsed < 1.5
 
     log = json.loads(caplog.records[-1].message)
     assert log["event"] == "middleware_timeout"
-    assert log["url"] == "http://catalog:8000/products/1"  
-    assert 900 <= log["duration_ms"] < 1500                
+    assert log["url"] == "http://catalog:8000/products/1"
+    assert 900 <= log["duration_ms"] < 1500
 
 
 @pytest.mark.asyncio

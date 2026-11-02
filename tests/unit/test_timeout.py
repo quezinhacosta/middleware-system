@@ -16,7 +16,6 @@ from middleware.resilience.timeout import (
 )
 from middleware.resilience.timeout_config import Criticality, get_timeout
 
-
 # ---------- timeout_config ----------
 
 ENVS = ["TIMEOUT_CATALOG_SECONDS", "TIMEOUT_PAYMENT_SECONDS", "TIMEOUT_DEFAULT_SECONDS"]

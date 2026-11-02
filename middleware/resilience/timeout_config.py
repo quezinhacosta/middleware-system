@@ -1,12 +1,12 @@
 import logging
 import math
 import os
-from enum import Enum
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class Criticality(str, Enum):
+class Criticality(str, StrEnum):
     CATALOG = "catalog"
     PAYMENT = "payment"
     DEFAULT = "default"

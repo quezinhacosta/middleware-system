@@ -127,7 +127,7 @@ def stack():
 
 def test_todos_os_containers_ficam_saudaveis(stack):
     status = {c: _status_saude(c) for c in CONTAINERS}
-    assert status == {c: "healthy" for c in CONTAINERS}
+    assert status == dict.fromkeys(CONTAINERS, "healthy")
 
 
 def test_liveness_do_order_service(stack):
