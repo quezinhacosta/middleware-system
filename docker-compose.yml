@@ -133,18 +133,18 @@ services:
       retries: 3
       start_period: 15s
 
-  payment-service:
-    container_name: payment-service
+  payment_service:
+    container_name: payment_service
     build:
       context: .
       dockerfile: Dockerfile
-    command: python services/payment-service/main.py
+    command: python services/payment_service/main.py
     expose:
       - "8002"
     environment:
-      - SERVICE_NAME=payment-service
+      - SERVICE_NAME=payment_service
       - PORT=8002
-      # Permite importar "middleware.*" (raiz do projeto) mesmo rodando o script em services/payment-service/
+      # Permite importar "middleware.*" (raiz do projeto) mesmo rodando o script em services/payment_service/
       - PYTHONPATH=.
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
