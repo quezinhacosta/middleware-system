@@ -1,8 +1,14 @@
 class MiddlewareTimeoutError(Exception):
     """Lançada quando uma operação excede o limite de tempo."""
 
-    def __init__(self, *, url: str | None = None, timeout: float,
-                 elapsed: float, operation: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        url: str | None = None,
+        timeout: float,
+        elapsed: float,
+        operation: str | None = None,
+    ) -> None:
         self.url = url
         self.timeout = timeout
         self.elapsed = elapsed

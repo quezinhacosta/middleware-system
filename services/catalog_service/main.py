@@ -25,6 +25,7 @@ app = FastAPI(
 
 app.include_router(health_router)
 
+
 @app.get("/")
 def read_root() -> dict[str, str]:
     return {

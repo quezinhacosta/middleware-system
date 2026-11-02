@@ -27,6 +27,7 @@ TEST_ENV = {
 
 # ---------- helpers ----------
 
+
 def _run(args, timeout=600):
     return subprocess.run(
         args,
@@ -64,7 +65,9 @@ def _containers_existentes():
 
 
 def _status_saude(container):
-    return _docker("inspect", "-f", "{{.State.Health.Status}}", container).stdout.strip()
+    return _docker(
+        "inspect", "-f", "{{.State.Health.Status}}", container
+    ).stdout.strip()
 
 
 def _esperar_saudaveis(timeout=180):
@@ -89,7 +92,9 @@ def _esperar_resposta(caminho, status_esperado, timeout=60):
         except httpx.HTTPError:
             pass
         time.sleep(2)
-    pytest.fail(f"{caminho} não retornou {status_esperado} em {timeout}s (último: {ultima})")
+    pytest.fail(
+        f"{caminho} não retornou {status_esperado} em {timeout}s (último: {ultima})"
+    )
 
 
 def _http_dentro_do_container(container, url):
@@ -100,6 +105,7 @@ def _http_dentro_do_container(container, url):
 
 
 # ---------- fixture ----------
+
 
 @pytest.fixture(scope="session")
 def stack():
@@ -113,10 +119,14 @@ def stack():
         )
 
     try:
-        r = _compose("up", "--build", "-d", "--wait", "--wait-timeout", "240", timeout=900)
+        r = _compose(
+            "up", "--build", "-d", "--wait", "--wait-timeout", "240", timeout=900
+        )
         if r.returncode != 0:
             logs = _compose("logs", "--tail", "40").stdout
-            pytest.fail(f"docker compose up falhou:\n{r.stderr[-1500:]}\n--- logs ---\n{logs[-3000:]}")
+            pytest.fail(
+                f"docker compose up falhou:\n{r.stderr[-1500:]}\n--- logs ---\n{logs[-3000:]}"
+            )
         yield BASE_URL
     finally:
         # -v remove só o volume de teste (rabbitmq_data_test), graças ao override
@@ -124,6 +134,7 @@ def stack():
 
 
 # ---------- testes ----------
+
 
 def test_todos_os_containers_ficam_saudaveis(stack):
     status = {c: _status_saude(c) for c in CONTAINERS}
@@ -154,8 +165,18 @@ def test_servicos_internos_respondem_dentro_da_rede(stack, container, url):
 
 
 def test_order_service_alcanca_catalog_e_payment_pela_rede_interna(stack):
-    assert _http_dentro_do_container("order-service", "http://catalog-service:8001/health/live") == "200"
-    assert _http_dentro_do_container("order-service", "http://payment-service:8002/health/live") == "200"
+    assert (
+        _http_dentro_do_container(
+            "order-service", "http://catalog-service:8001/health/live"
+        )
+        == "200"
+    )
+    assert (
+        _http_dentro_do_container(
+            "order-service", "http://payment-service:8002/health/live"
+        )
+        == "200"
+    )
 
 
 @pytest.mark.parametrize("porta", [8001, 8002])
@@ -186,4 +207,6 @@ def test_readiness_degrada_quando_o_broker_cai_e_se_recupera(stack):
     finally:
         _docker("start", "message-broker")
         _esperar_saudaveis(timeout=180)
-    assert _esperar_resposta("/health/ready", 200, timeout=60).json() == {"status": "UP"}
+    assert _esperar_resposta("/health/ready", 200, timeout=60).json() == {
+        "status": "UP"
+    }

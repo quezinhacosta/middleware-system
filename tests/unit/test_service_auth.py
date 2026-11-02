@@ -26,6 +26,7 @@ def auth(secret):
 
 # ---------- configuração ----------
 
+
 @pytest.mark.parametrize("segredo", ["", "curto", "a" * 31])
 def test_segredo_fraco_ou_ausente_falha_rapido(segredo):
     with pytest.raises(ServiceAuthConfigError):
@@ -56,6 +57,7 @@ def test_get_authenticator_e_singleton(s2s_env):
 
 # ---------- geração e validação ----------
 
+
 def test_token_valido_retorna_identidade(auth):
     token, exp = auth.generate_token("order-service", "catalog-service")
     identidade = auth.validate_token(token, "catalog-service")
@@ -67,7 +69,9 @@ def test_token_valido_retorna_identidade(auth):
 
 def test_token_contem_claims_obrigatorios(auth, secret):
     token, _ = auth.generate_token("order-service", "catalog-service")
-    claims = jwt.decode(token, secret, algorithms=[ALGORITHM], audience="catalog-service")
+    claims = jwt.decode(
+        token, secret, algorithms=[ALGORITHM], audience="catalog-service"
+    )
     assert {"iss", "aud", "iat", "exp", "jti"} <= claims.keys()
 
 
@@ -107,8 +111,11 @@ def test_token_malformado_e_rejeitado(auth):
 
 def test_algoritmo_none_e_rejeitado(auth):
     claims = {
-        "iss": "order-service", "aud": "catalog-service",
-        "iat": int(time.time()), "exp": int(time.time()) + 60, "jti": "x",
+        "iss": "order-service",
+        "aud": "catalog-service",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 60,
+        "jti": "x",
     }
     token = jwt.encode(claims, key=None, algorithm="none")
     with pytest.raises(ServiceAuthError):
@@ -117,8 +124,10 @@ def test_algoritmo_none_e_rejeitado(auth):
 
 def test_claim_obrigatoria_ausente_e_rejeitada(auth, secret):
     claims = {
-        "iss": "order-service", "aud": "catalog-service",
-        "iat": int(time.time()), "exp": int(time.time()) + 60,
+        "iss": "order-service",
+        "aud": "catalog-service",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 60,
     }  # sem jti
     token = jwt.encode(claims, secret, algorithm=ALGORITHM)
     with pytest.raises(ServiceAuthError):
@@ -133,7 +142,9 @@ def test_emissor_fora_da_allowlist_e_proibido(auth):
 
 def test_emissor_na_allowlist_passa(auth):
     token, _ = auth.generate_token("order-service", "catalog-service")
-    identidade = auth.validate_token(token, "catalog-service", allowed_issuers=["order-service"])
+    identidade = auth.validate_token(
+        token, "catalog-service", allowed_issuers=["order-service"]
+    )
     assert identidade.service == "order-service"
 
 
@@ -143,39 +154,54 @@ def test_forbidden_e_subclasse_de_auth_error():
 
 # ---------- ServiceTokenProvider ----------
 
+
 def test_provider_reutiliza_token_em_cache(auth):
     provider = ServiceTokenProvider("order-service", auth)
-    assert provider.get_token("catalog-service") == provider.get_token("catalog-service")
+    assert provider.get_token("catalog-service") == provider.get_token(
+        "catalog-service"
+    )
 
 
 def test_provider_gera_token_separado_por_audiencia(auth):
     provider = ServiceTokenProvider("order-service", auth)
-    assert provider.get_token("catalog-service") != provider.get_token("payment-service")
+    assert provider.get_token("catalog-service") != provider.get_token(
+        "payment-service"
+    )
 
 
 def test_provider_renova_token_proximo_da_expiracao(secret):
     # ttl (5s) menor que REFRESH_MARGIN_SECONDS (10s): sempre renova
-    provider = ServiceTokenProvider("order-service", ServiceAuthenticator(secret, ttl_seconds=5))
-    assert provider.get_token("catalog-service") != provider.get_token("catalog-service")
+    provider = ServiceTokenProvider(
+        "order-service", ServiceAuthenticator(secret, ttl_seconds=5)
+    )
+    assert provider.get_token("catalog-service") != provider.get_token(
+        "catalog-service"
+    )
 
 
 def test_provider_auth_headers_usa_header_padrao(auth):
     provider = ServiceTokenProvider("order-service", auth)
     headers = provider.auth_headers("catalog-service")
     assert list(headers) == [SERVICE_KEY_HEADER]
-    assert auth.validate_token(headers[SERVICE_KEY_HEADER], "catalog-service").service == "order-service"
+    assert (
+        auth.validate_token(headers[SERVICE_KEY_HEADER], "catalog-service").service
+        == "order-service"
+    )
 
 
 # ---------- dependência FastAPI ----------
+
 
 @pytest.fixture
 def client(s2s_env):
     app = FastAPI()
 
     @app.get("/interno")
-    def interno(ident: ServiceIdentity = Depends(
-        require_internal_service("catalog-service", {"order-service"})
-    )):
+    def interno(
+        ident: ServiceIdentity = Depends(
+            require_internal_service("catalog-service", {"order-service"})
+        ),
+    ):
         return {"caller": ident.service}
 
     return TestClient(app)
@@ -202,12 +228,18 @@ def test_rota_com_token_invalido_retorna_401(client):
 
 
 def test_rota_com_audiencia_errada_retorna_401(client, secret):
-    r = client.get("/interno", headers={SERVICE_KEY_HEADER: _token(secret, audience="payment-service")})
+    r = client.get(
+        "/interno",
+        headers={SERVICE_KEY_HEADER: _token(secret, audience="payment-service")},
+    )
     assert r.status_code == 401
 
 
 def test_rota_com_chamador_nao_autorizado_retorna_403(client, secret):
-    r = client.get("/interno", headers={SERVICE_KEY_HEADER: _token(secret, issuer="payment-service")})
+    r = client.get(
+        "/interno",
+        headers={SERVICE_KEY_HEADER: _token(secret, issuer="payment-service")},
+    )
     assert r.status_code == 403
 
 

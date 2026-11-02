@@ -33,7 +33,9 @@ def relogio():
 
 @pytest.fixture
 def cb(relogio):
-    return CircuitBreaker("teste", failure_threshold=3, recovery_timeout=10, clock=relogio)
+    return CircuitBreaker(
+        "teste", failure_threshold=3, recovery_timeout=10, clock=relogio
+    )
 
 
 def ok():
@@ -52,6 +54,7 @@ def abrir(cb):
 
 # ---------- validação de parâmetros ----------
 
+
 def test_threshold_invalido():
     with pytest.raises(ValueError):
         CircuitBreaker("x", failure_threshold=0)
@@ -64,6 +67,7 @@ def test_recovery_timeout_invalido(valor):
 
 
 # ---------- transições ----------
+
 
 def test_inicia_fechado(cb):
     assert cb.state is CircuitState.CLOSED
@@ -160,9 +164,15 @@ def test_half_open_permite_apenas_um_canario(cb, relogio):
 
 # ---------- classificação de exceções ----------
 
+
 def test_excecao_inesperada_nao_conta_como_falha_de_infra(relogio):
-    cb = CircuitBreaker("neg", failure_threshold=2, recovery_timeout=10,
-                        expected_exceptions=(ConnectionError,), clock=relogio)
+    cb = CircuitBreaker(
+        "neg",
+        failure_threshold=2,
+        recovery_timeout=10,
+        expected_exceptions=(ConnectionError,),
+        clock=relogio,
+    )
 
     def erro_de_negocio():
         raise ValueError("estoque insuficiente")
@@ -200,6 +210,7 @@ def test_abort_com_circuito_fechado_nao_conta_falha(cb):
 
 
 # ---------- decorador e async ----------
+
 
 def test_decorador_sync(cb):
     @cb

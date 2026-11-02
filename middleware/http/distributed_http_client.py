@@ -18,7 +18,7 @@ class DistributedHttpClient:
         self,
         *,
         default_headers: dict[str, str] | None = None,
-        client: httpx.AsyncClient | None = None,   # injetável para testes
+        client: httpx.AsyncClient | None = None,  # injetável para testes
         max_connections: int = 100,
     ) -> None:
         self._client = client or httpx.AsyncClient(
@@ -60,7 +60,9 @@ class DistributedHttpClient:
         return await self.request("GET", url, criticality=Criticality.CATALOG, **kwargs)
 
     async def authorize_payment(self, url: str, **kwargs) -> httpx.Response:
-        return await self.request("POST", url, criticality=Criticality.PAYMENT, **kwargs)
+        return await self.request(
+            "POST", url, criticality=Criticality.PAYMENT, **kwargs
+        )
 
     async def aclose(self) -> None:
         await self._client.aclose()

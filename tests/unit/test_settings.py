@@ -17,6 +17,7 @@ def ambiente_limpo(monkeypatch, tmp_path):
 
 # ---------- defaults ----------
 
+
 def test_defaults():
     s = Settings()
     assert s.SERVICE_NAME == "middleware-service"
@@ -36,6 +37,7 @@ def test_defaults():
 
 # ---------- leitura de env vars e .env ----------
 
+
 def test_env_var_sobrescreve_default(monkeypatch):
     monkeypatch.setenv("PORT", "9000")
     monkeypatch.setenv("ENVIRONMENT", "production")
@@ -53,7 +55,9 @@ def test_conversao_de_tipos(monkeypatch):
 
 
 def test_le_arquivo_dotenv(tmp_path):
-    (tmp_path / ".env").write_text("PORT=9100\nSERVICE_NAME=do-dotenv\n", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "PORT=9100\nSERVICE_NAME=do-dotenv\n", encoding="utf-8"
+    )
     s = Settings()
     assert s.PORT == 9100
     assert s.SERVICE_NAME == "do-dotenv"
@@ -72,6 +76,7 @@ def test_variaveis_desconhecidas_sao_ignoradas(tmp_path):
 
 
 # ---------- validação ----------
+
 
 @pytest.mark.parametrize(
     "campo,valor",
@@ -107,6 +112,7 @@ def test_zero_retentativas_e_valido(monkeypatch):
 
 
 # ---------- get_settings ----------
+
 
 def test_get_settings_retorna_singleton(monkeypatch):
     monkeypatch.setenv("PORT", "9000")

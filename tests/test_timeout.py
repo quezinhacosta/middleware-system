@@ -31,8 +31,8 @@ async def test_async_call_is_cancelled_at_deadline():
         await slow("http://catalog/products/1")
     elapsed = time.perf_counter() - start
 
-    assert 1.0 <= elapsed < 1.5          # não esperou os 3s
-    assert cancelled.is_set()             # corrotina foi realmente cancelada
+    assert 1.0 <= elapsed < 1.5  # não esperou os 3s
+    assert cancelled.is_set()  # corrotina foi realmente cancelada
     assert exc.value.url == "http://catalog/products/1"
 
 
@@ -104,13 +104,13 @@ async def test_invalid_env_falls_back_to_default(monkeypatch):
     async def fast():
         return "ok"
 
-    assert await fast() == "ok"   # default 5.0s, sem quebrar
+    assert await fast() == "ok"  # default 5.0s, sem quebrar
 
 
 @pytest.mark.asyncio
 async def test_http_client_aborts_slow_request():
     async def slow_handler(request: httpx.Request) -> httpx.Response:
-        await asyncio.sleep(3)                      # serviço lento simulado
+        await asyncio.sleep(3)  # serviço lento simulado
         return httpx.Response(200, json={"ok": True})
 
     transport = httpx.MockTransport(slow_handler)
@@ -122,5 +122,5 @@ async def test_http_client_aborts_slow_request():
             await http.request(
                 "GET", "http://catalog:8000/products/1", timeout_override=None
             ) if False else await http.get_catalog("http://catalog:8000/products/1")
-    assert time.perf_counter() - start < 2.0        # catálogo = 1.5s, não 3s
+    assert time.perf_counter() - start < 2.0  # catálogo = 1.5s, não 3s
     assert exc.value.url == "http://catalog:8000/products/1"

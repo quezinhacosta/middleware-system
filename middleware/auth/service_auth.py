@@ -8,6 +8,7 @@ Variáveis de ambiente:
   INTERNAL_SERVICE_SECRET  segredo compartilhado (>= 32 bytes). Obrigatório.
   INTERNAL_TOKEN_TTL       validade do token em segundos (padrão: 60).
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,7 +23,7 @@ from functools import lru_cache
 import jwt
 from fastapi import Header, HTTPException, status  # novo
 
-logger = logging.getLogger(__name__)   # novo
+logger = logging.getLogger(__name__)  # novo
 
 SERVICE_KEY_HEADER = "X-Internal-Service-Key"
 ALGORITHM = "HS256"
@@ -30,6 +31,7 @@ DEFAULT_TTL_SECONDS = 60
 LEEWAY_SECONDS = 5
 MIN_SECRET_BYTES = 32
 REFRESH_MARGIN_SECONDS = 10
+
 
 class ServiceAuthConfigError(RuntimeError):
     """Configuração inválida (ex.: segredo ausente ou fraco). Falha rápido no startup."""
@@ -128,6 +130,7 @@ def get_authenticator() -> ServiceAuthenticator:
         ttl_seconds=int(os.environ.get("INTERNAL_TOKEN_TTL", DEFAULT_TTL_SECONDS)),
     )
 
+
 def require_internal_service(
     audience: str,
     allowed_callers: Iterable[str] | None = None,
@@ -139,7 +142,9 @@ def require_internal_service(
     callers = frozenset(allowed_callers) if allowed_callers is not None else None
 
     def dependency(
-        x_internal_service_key: str | None = Header(default=None, alias=SERVICE_KEY_HEADER),
+        x_internal_service_key: str | None = Header(
+            default=None, alias=SERVICE_KEY_HEADER
+        ),
     ) -> ServiceIdentity:
         if not x_internal_service_key:
             raise HTTPException(
@@ -151,7 +156,9 @@ def require_internal_service(
             )
         except ServiceForbiddenError as exc:
             logger.warning("S2S negado (403): %s", exc)
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Serviço não autorizado") from exc
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "Serviço não autorizado"
+            ) from exc
         except ServiceAuthError as exc:
             # Motivo detalhado só no log; a resposta é genérica. Nunca logar o token.
             logger.warning("S2S rejeitado (401): %s", exc)

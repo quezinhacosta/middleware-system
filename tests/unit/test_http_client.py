@@ -9,7 +9,11 @@ from middleware.resilience.exceptions import MiddlewareTimeoutError
 
 @pytest.fixture(autouse=True)
 def limpar_envs(monkeypatch):
-    for nome in ("TIMEOUT_CATALOG_SECONDS", "TIMEOUT_PAYMENT_SECONDS", "TIMEOUT_DEFAULT_SECONDS"):
+    for nome in (
+        "TIMEOUT_CATALOG_SECONDS",
+        "TIMEOUT_PAYMENT_SECONDS",
+        "TIMEOUT_DEFAULT_SECONDS",
+    ):
         monkeypatch.delenv(nome, raising=False)
 
 
@@ -21,6 +25,7 @@ def fazer_cliente(handler):
 
 
 # ---------- requisição básica ----------
+
 
 async def test_request_retorna_a_resposta():
     capturado = {}
@@ -45,6 +50,7 @@ async def test_status_de_erro_nao_vira_excecao():
 
 
 # ---------- timeout por criticidade ----------
+
 
 async def test_timeout_default_e_3_segundos():
     capturado = {}
@@ -93,6 +99,7 @@ async def test_timeout_respeita_env_var(monkeypatch):
 
 # ---------- estouro de prazo ----------
 
+
 async def test_prazo_total_estourado_vira_middleware_timeout(monkeypatch):
     monkeypatch.setenv("TIMEOUT_CATALOG_SECONDS", "0.05")
 
@@ -131,6 +138,7 @@ async def test_timeout_de_fase_sanitiza_url():
 
 # ---------- outros erros e ciclo de vida ----------
 
+
 async def test_erro_de_conexao_nao_e_convertido():
     def handler(request):
         raise httpx.ConnectError("recusada", request=request)
@@ -141,7 +149,9 @@ async def test_erro_de_conexao_nao_e_convertido():
 
 
 async def test_context_manager_fecha_o_client():
-    http = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200)))
+    http = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200))
+    )
     async with DistributedHttpClient(client=http):
         assert not http.is_closed
     assert http.is_closed

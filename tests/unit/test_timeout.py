@@ -47,6 +47,7 @@ def test_env_invalida_cai_no_default(monkeypatch, valor):
 
 # ---------- helpers ----------
 
+
 def test_sanitize_url_remove_query_e_credenciais():
     url = "https://user:senha@catalog:8080/items/1?token=segredo"
     assert _sanitize_url(url) == "https://catalog:8080/items/1"
@@ -71,6 +72,7 @@ def test_mensagem_da_excecao():
 
 # ---------- run_with_deadline ----------
 
+
 async def test_run_with_deadline_sucesso():
     async def rapida():
         return 42
@@ -83,7 +85,9 @@ async def test_run_with_deadline_estoura_e_sanitiza_url():
         await asyncio.sleep(1)
 
     with pytest.raises(MiddlewareTimeoutError) as exc:
-        await run_with_deadline(lenta(), 0.05, url="http://catalog/x?token=abc", operation="buscar")
+        await run_with_deadline(
+            lenta(), 0.05, url="http://catalog/x?token=abc", operation="buscar"
+        )
     assert exc.value.url == "http://catalog/x"
     assert exc.value.operation == "buscar"
     assert exc.value.timeout == 0.05
@@ -91,6 +95,7 @@ async def test_run_with_deadline_estoura_e_sanitiza_url():
 
 
 # ---------- with_timeout (async) ----------
+
 
 async def test_with_timeout_async_sucesso():
     @with_timeout(1)
@@ -133,6 +138,7 @@ async def test_with_timeout_segundos_invalidos():
 
 
 # ---------- with_timeout (sync) ----------
+
 
 def test_with_timeout_sync_sucesso():
     @with_timeout(1)
@@ -191,13 +197,16 @@ def test_with_timeout_preserva_nome():
 
 # ---------- handler 504 ----------
 
+
 def test_handler_retorna_504_sem_vazar_url():
     app = FastAPI()
     register_timeout_handler(app)
 
     @app.get("/lenta")
     def lenta():
-        raise MiddlewareTimeoutError(url="http://interno/segredo", timeout=1.5, elapsed=1.6)
+        raise MiddlewareTimeoutError(
+            url="http://interno/segredo", timeout=1.5, elapsed=1.6
+        )
 
     r = TestClient(app).get("/lenta")
     assert r.status_code == 504

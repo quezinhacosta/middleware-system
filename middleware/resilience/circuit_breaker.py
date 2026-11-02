@@ -193,7 +193,10 @@ class CircuitBreaker:
             return
         logger.warning(
             "circuit_breaker=%s transition=%s->%s failures=%d",
-            self.name, self._state.name, new_state.name, self._failures,
+            self.name,
+            self._state.name,
+            new_state.name,
+            self._failures,
         )
         self._state = new_state
         self._publish_metric()
