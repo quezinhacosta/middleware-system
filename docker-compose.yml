@@ -13,9 +13,8 @@ services:
   message-broker:
     container_name: message-broker
     image: rabbitmq:3-management-alpine
-    expose:
-      - "5672"
     ports:
+      - "5672:5672"
       - "15672:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:?Defina RABBITMQ_DEFAULT_USER no arquivo .env}

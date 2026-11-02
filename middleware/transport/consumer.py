@@ -29,14 +29,16 @@ Uso:
         Topology(exchange="orders", queue="payments.requested", routing_key="order.created"),
     ).start()
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from middleware.resilience.circuit_breaker import CircuitBreakerOpenException
 from middleware.resilience.exceptions import MiddlewareTimeoutError
@@ -83,7 +85,9 @@ def declare_topology(channel: Any, topology: Topology) -> None:
     o RabbitMQ recusa (PRECONDITION_FAILED). Nesse caso, apague a fila antiga.
     """
     # Fila de descarte / auditoria
-    channel.exchange_declare(exchange=topology.dlx, exchange_type="direct", durable=True)
+    channel.exchange_declare(
+        exchange=topology.dlx, exchange_type="direct", durable=True
+    )
     channel.queue_declare(queue=topology.dlq, durable=True)
     channel.queue_bind(
         queue=topology.dlq, exchange=topology.dlx, routing_key=topology.dlq_routing_key
@@ -102,7 +106,9 @@ def declare_topology(channel: Any, topology: Topology) -> None:
         },
     )
     channel.queue_bind(
-        queue=topology.queue, exchange=topology.exchange, routing_key=topology.routing_key
+        queue=topology.queue,
+        exchange=topology.exchange,
+        routing_key=topology.routing_key,
     )
 
 
@@ -188,9 +194,14 @@ class EventConsumer(ABC):
                     return
                 delay = self._backoff(attempt)
                 _log(
-                    logging.WARNING, "consumer_retry",
-                    queue=self._topology.queue, delivery_tag=tag, attempt=attempt,
-                    max_attempts=total_attempts, delay_s=delay, error_type=type(exc).__name__,
+                    logging.WARNING,
+                    "consumer_retry",
+                    queue=self._topology.queue,
+                    delivery_tag=tag,
+                    attempt=attempt,
+                    max_attempts=total_attempts,
+                    delay_s=delay,
+                    error_type=type(exc).__name__,
                 )
                 self._sleep(delay)
             except Exception as exc:
@@ -201,8 +212,11 @@ class EventConsumer(ABC):
             else:
                 ch.basic_ack(delivery_tag=tag)
                 _log(
-                    logging.DEBUG, "consumer_ack",
-                    queue=self._topology.queue, delivery_tag=tag, attempts=attempt,
+                    logging.DEBUG,
+                    "consumer_ack",
+                    queue=self._topology.queue,
+                    delivery_tag=tag,
+                    attempts=attempt,
                 )
                 return
 
@@ -226,8 +240,13 @@ class EventConsumer(ABC):
     ) -> None:
         ch.basic_nack(delivery_tag=tag, requeue=False)  # RabbitMQ roteia para a DLX/DLQ
         _log(
-            logging.WARNING, "consumer_dead_letter",
-            queue=self._topology.queue, dlq=self._topology.dlq, delivery_tag=tag,
-            reason=reason, attempts=attempts, error_type=type(error).__name__,
+            logging.WARNING,
+            "consumer_dead_letter",
+            queue=self._topology.queue,
+            dlq=self._topology.dlq,
+            delivery_tag=tag,
+            reason=reason,
+            attempts=attempts,
+            error_type=type(error).__name__,
             error=str(error)[:200],
         )

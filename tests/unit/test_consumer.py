@@ -77,7 +77,9 @@ class Recorder(EventConsumer):
 
 @pytest.fixture
 def topology():
-    return Topology(exchange="orders", queue="orders.created", routing_key="order.created")
+    return Topology(
+        exchange="orders", queue="orders.created", routing_key="order.created"
+    )
 
 
 @pytest.fixture
@@ -106,6 +108,7 @@ def enviar(consumer, ch, body, tag=1):
 
 # ---------- topologia ----------
 
+
 def test_nomes_da_topologia(topology):
     assert topology.dlx == "orders.dlx"
     assert topology.dlq == "orders.created.dlq"
@@ -128,10 +131,16 @@ def test_declare_topology_cria_dlx_dlq_e_fila_principal(ch, topology):
     }
 
     binds = [kw for nome, kw in ch.calls if nome == "queue_bind"]
-    assert {"queue": "orders.created.dlq", "exchange": "orders.dlx",
-            "routing_key": "orders.created.dlq"} in binds
-    assert {"queue": "orders.created", "exchange": "orders",
-            "routing_key": "order.created"} in binds
+    assert {
+        "queue": "orders.created.dlq",
+        "exchange": "orders.dlx",
+        "routing_key": "orders.created.dlq",
+    } in binds
+    assert {
+        "queue": "orders.created",
+        "exchange": "orders",
+        "routing_key": "order.created",
+    } in binds
 
 
 def test_setup_configura_qos_e_consumo_com_ack_manual(make, ch):
@@ -153,6 +162,7 @@ def test_start_e_stop(make, ch):
 
 # ---------- sucesso ----------
 
+
 def test_mensagem_valida_recebe_ack(make, ch, sleeps):
     consumer = make()
     enviar(consumer, ch, b'{"order_id": 1}', tag=42)
@@ -164,10 +174,19 @@ def test_mensagem_valida_recebe_ack(make, ch, sleeps):
 
 # ---------- mensagens inválidas (poison messages) ----------
 
+
 @pytest.mark.parametrize(
     "corpo",
     [b"{quebrado", b"", b"\x80abc", b"[1, 2]", b'"texto"', b"123", b"null"],
-    ids=["json-quebrado", "vazio", "utf8-invalido", "lista", "string", "numero", "null"],
+    ids=[
+        "json-quebrado",
+        "vazio",
+        "utf8-invalido",
+        "lista",
+        "string",
+        "numero",
+        "null",
+    ],
 )
 def test_corpo_invalido_vai_para_dlq_sem_chamar_handler(make, ch, sleeps, corpo):
     consumer = make()
@@ -189,6 +208,7 @@ def test_consumidor_continua_saudavel_apos_poison_message(make, ch):
 
 # ---------- erros irrecuperáveis ----------
 
+
 @pytest.mark.parametrize(
     "erro",
     [UnrecoverableError("x"), ValueError("x"), KeyError("campo"), RuntimeError("x")],
@@ -204,6 +224,7 @@ def test_erro_irrecuperavel_vai_direto_para_dlq(make, ch, sleeps, erro):
 
 
 # ---------- erros transientes ----------
+
 
 def test_transiente_seguido_de_sucesso_recebe_ack_com_backoff(make, ch, sleeps):
     consumer = make(behaviors=[TransientError("a"), TransientError("b"), None])
@@ -233,7 +254,10 @@ def test_sem_retentativas_falha_transiente_vai_direto_para_dlq(make, ch, sleeps)
 
 def test_backoff_exponencial_respeita_o_teto(make, ch, sleeps):
     consumer = make(
-        behaviors=[TransientError("x")] * 10, max_retries=5, backoff_base=1.0, backoff_max=3.0
+        behaviors=[TransientError("x")] * 10,
+        max_retries=5,
+        backoff_base=1.0,
+        backoff_max=3.0,
     )
     enviar(consumer, ch, b'{"id": 1}')
     assert len(consumer.calls) == 6
@@ -249,7 +273,13 @@ def test_backoff_exponencial_respeita_o_teto(make, ch, sleeps):
         MiddlewareTimeoutError(timeout=1.0, elapsed=1.1),
         CircuitBreakerOpenException("catalog", 2.0),
     ],
-    ids=["Transient", "ConnectionError", "TimeoutError", "MiddlewareTimeout", "CircuitOpen"],
+    ids=[
+        "Transient",
+        "ConnectionError",
+        "TimeoutError",
+        "MiddlewareTimeout",
+        "CircuitOpen",
+    ],
 )
 def test_erros_transientes_padrao_sao_retentados(make, ch, sleeps, erro):
     consumer = make(behaviors=[erro, None])
@@ -274,6 +304,7 @@ def test_subclasse_pode_redefinir_erros_transientes(make, ch, sleeps):
 
 # ---------- logs ----------
 
+
 def test_dlq_gera_log_sem_vazar_o_corpo(make, ch, caplog):
     caplog.set_level(logging.DEBUG, logger="middleware.transport.consumer")
     consumer = make()
@@ -285,6 +316,7 @@ def test_dlq_gera_log_sem_vazar_o_corpo(make, ch, caplog):
 
 # ---------- validação ----------
 
+
 def test_handle_message_e_abstrato(ch, topology):
     with pytest.raises(TypeError):
         EventConsumer(ch, topology)
@@ -292,7 +324,12 @@ def test_handle_message_e_abstrato(ch, topology):
 
 @pytest.mark.parametrize(
     "kw",
-    [{"max_retries": -1}, {"backoff_base": -1}, {"backoff_max": -1}, {"prefetch_count": 0}],
+    [
+        {"max_retries": -1},
+        {"backoff_base": -1},
+        {"backoff_max": -1},
+        {"prefetch_count": 0},
+    ],
 )
 def test_parametros_invalidos(make, kw):
     with pytest.raises(ValueError):
