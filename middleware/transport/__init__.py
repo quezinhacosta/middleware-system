@@ -1,4 +1,5 @@
 """Camada de transporte do middleware (mensageria)."""
+
 from .consumer import (
     EventConsumer,
     Topology,

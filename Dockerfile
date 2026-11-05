@@ -21,7 +21,9 @@ COPY middleware/ /app/middleware/
 COPY services/ /app/services/
 
 # Cria usuario sem privilegios de root por seguranca (Hardening)
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser \
+    && mkdir -p /data \
+    && chown -R appuser:appuser /app /data
 USER appuser
 
 # O comando de inicializacao especifico e a porta sao definidos via docker-compose para cada servico
