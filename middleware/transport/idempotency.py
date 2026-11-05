@@ -34,12 +34,12 @@ from __future__ import annotations
 import functools
 import json
 import logging
-from pathlib import Path
 import sqlite3
 import threading
 import time
 from collections.abc import Callable
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Protocol
 
 from middleware.transport.consumer import TransientError, UnrecoverableError
@@ -90,7 +90,7 @@ class SqliteIdempotencyStore:
     ) -> None:
         self._clock = clock
         self._lock = threading.Lock()
-        
+
         # Garante a criação do diretório pai se o caminho for para um ficheiro
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
