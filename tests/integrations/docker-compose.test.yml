@@ -1,5 +1,7 @@
-# Override usado só pelos testes de integração: isola o volume do RabbitMQ
-# para que `docker compose down -v` do teste não apague dados de desenvolvimento.
+# Override usado só pelos testes de integração: isola os volumes para que
+# `docker compose down -v` do teste não apague dados de desenvolvimento.
 volumes:
   rabbitmq_data:
     name: rabbitmq_data_test
+  payment_idempotency:
+    name: payment_idempotency_test
