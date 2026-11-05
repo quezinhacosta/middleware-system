@@ -28,16 +28,19 @@ Uso:
         def handle_message(self, envelope: dict) -> None:
             ...  # cobrança: roda no máximo uma vez por event_id
 """
+
 from __future__ import annotations
 
 import functools
 import json
 import logging
+from pathlib import Path
 import sqlite3
 import threading
 import time
-from enum import Enum
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from enum import StrEnum
+from typing import Any, Protocol
 
 from middleware.transport.consumer import TransientError, UnrecoverableError
 
@@ -59,7 +62,7 @@ class IdempotencyStoreError(TransientError):
     """Registro de idempotência indisponível. Falha fechada: não processa sem garantia."""
 
 
-class AcquireResult(str, Enum):
+class AcquireResult(StrEnum):
     ACQUIRED = "acquired"
     IN_PROGRESS = "in_progress"
     DONE = "done"
@@ -82,9 +85,16 @@ def _log(level: int, event: str, **fields: Any) -> None:
 class SqliteIdempotencyStore:
     """Registro em SQLite. `path=":memory:"` para testes/dev; arquivo para persistir."""
 
-    def __init__(self, path: str = ":memory:", *, clock: Callable[[], float] = time.time) -> None:
+    def __init__(
+        self, path: str = ":memory:", *, clock: Callable[[], float] = time.time
+    ) -> None:
         self._clock = clock
         self._lock = threading.Lock()
+        
+        # Garante a criação do diretório pai se o caminho for para um ficheiro
+        if path != ":memory:":
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+
         # autocommit: as transações são controladas à mão (BEGIN IMMEDIATE)
         self._conn = sqlite3.connect(
             path, timeout=5.0, check_same_thread=False, isolation_level=None
@@ -104,7 +114,9 @@ class SqliteIdempotencyStore:
             # BEGIN IMMEDIATE: trava escrita também entre processos/conexões diferentes
             self._conn.execute("BEGIN IMMEDIATE")
             try:
-                self._conn.execute("DELETE FROM idempotency WHERE expires_at <= ?", (now,))
+                self._conn.execute(
+                    "DELETE FROM idempotency WHERE expires_at <= ?", (now,)
+                )
                 row = self._conn.execute(
                     "SELECT state FROM idempotency WHERE key = ?", (key,)
                 ).fetchone()
@@ -116,7 +128,9 @@ class SqliteIdempotencyStore:
                     result = AcquireResult.ACQUIRED
                 else:
                     result = (
-                        AcquireResult.DONE if row[0] == "done" else AcquireResult.IN_PROGRESS
+                        AcquireResult.DONE
+                        if row[0] == "done"
+                        else AcquireResult.IN_PROGRESS
                     )
                 self._conn.execute("COMMIT")
             except BaseException:
@@ -193,14 +207,22 @@ class IdempotencyManager:
         try:
             self.release(key)
         except Exception as exc:
-            _log(logging.ERROR, "idempotency_release_failed", error_type=type(exc).__name__)
+            _log(
+                logging.ERROR,
+                "idempotency_release_failed",
+                error_type=type(exc).__name__,
+            )
 
     def _complete_quietly(self, key: str) -> None:
         # O negócio já aconteceu: não propagar erro aqui evitaria reprocessar e cobrar de novo.
         try:
             self.complete(key)
         except Exception as exc:
-            _log(logging.ERROR, "idempotency_complete_failed", error_type=type(exc).__name__)
+            _log(
+                logging.ERROR,
+                "idempotency_complete_failed",
+                error_type=type(exc).__name__,
+            )
 
 
 class IdempotentConsumerInterceptor:
@@ -226,14 +248,18 @@ class IdempotentConsumerInterceptor:
         )
         if not executed:
             _log(
-                logging.WARNING, "MESSAGE_ALREADY_PROCESSED",
-                namespace=self._namespace, event_id=event_id,
+                logging.WARNING,
+                "MESSAGE_ALREADY_PROCESSED",
+                namespace=self._namespace,
+                event_id=event_id,
             )
 
     def _extract_event_id(self, envelope: dict) -> str:
         value = envelope.get(self._key)
         if isinstance(value, bool) or not isinstance(value, (str, int)):
-            raise UnrecoverableError(f"campo '{self._key}' ausente ou inválido no envelope")
+            raise UnrecoverableError(
+                f"campo '{self._key}' ausente ou inválido no envelope"
+            )
         text = str(value).strip()
         if not text:
             raise UnrecoverableError(f"campo '{self._key}' vazio no envelope")
@@ -265,7 +291,9 @@ def _find_envelope(args: tuple, kwargs: dict) -> dict:
     raise TypeError("@idempotent: o handler precisa receber o envelope (dict)")
 
 
-def _resolve_manager(explicit: IdempotencyManager | None, args: tuple) -> IdempotencyManager:
+def _resolve_manager(
+    explicit: IdempotencyManager | None, args: tuple
+) -> IdempotencyManager:
     if explicit is not None:
         return explicit
     if args:
