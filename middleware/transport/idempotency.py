@@ -292,13 +292,13 @@ def _find_envelope(args: tuple, kwargs: dict) -> dict:
 
 
 def _resolve_manager(
-    explicit: IdempotencyManager | None, args: tuple
+    explicit: IdempotencyManager | None, args: tuple[Any, ...]
 ) -> IdempotencyManager:
     if explicit is not None:
         return explicit
     if args:
         from_instance = getattr(args[0], "idempotency_manager", None)
-        if from_instance is not None:
+        if isinstance(from_instance, IdempotencyManager):
             return from_instance
     if _default_manager is not None:
         return _default_manager
