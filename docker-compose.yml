@@ -8,6 +8,8 @@ networks:
 volumes:
   rabbitmq_data:
     name: rabbitmq_data
+  payment_idempotency:
+    name: payment_idempotency
 
 services:
   message-broker:
@@ -19,6 +21,7 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:?Defina RABBITMQ_DEFAULT_USER no arquivo .env}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:?Defina RABBITMQ_DEFAULT_PASS no arquivo .env}
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE:-supersecretcookie2026}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -27,17 +30,17 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.00'   # CORREÇÃO: com 0.50 o boot levou ~23s e cada healthcheck (que sobe uma VM Erlang) fica lento
+          cpus: '1.00'
           memory: 512M
         reservations:
           cpus: '0.10'
           memory: 128M
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
-      interval: 20s
-      timeout: 15s
-      retries: 5
-      start_period: 40s
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
 
   order-service:
     container_name: order-service
@@ -133,41 +136,44 @@ services:
       start_period: 15s
 
   payment-service:
-      container_name: payment-service
-      build:
-        context: .
-        dockerfile: Dockerfile
-      command: python services/payment_service/main.py
-      expose:
-        - "8002"
-      environment:
-        - SERVICE_NAME=payment-service
-        - PORT=8002
-        # Permite importar "middleware.*" (raiz do projeto) mesmo rodando o script em services/payment_service/
-        - PYTHONPATH=.
-        - ENVIRONMENT=${ENVIRONMENT:-development}
-        - LOG_LEVEL=${LOG_LEVEL:-INFO}
-        - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
-        - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
-        - RABBITMQ_USER=${RABBITMQ_DEFAULT_USER}
-        - RABBITMQ_PASS=${RABBITMQ_DEFAULT_PASS}
-      networks:
-        - ecommerce-network
-      depends_on:
-        message-broker:
-          condition: service_healthy
-      restart: unless-stopped
-      deploy:
-        resources:
-          limits:
-            cpus: '0.50'
-            memory: 256M
-          reservations:
-            cpus: '0.10'
-            memory: 64M
-      healthcheck:
-        test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health/ready', timeout=3)"]
-        interval: 15s
-        timeout: 5s
-        retries: 3
-        start_period: 15s
+    container_name: payment-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python services/payment_service/main.py
+    expose:
+      - "8002"
+    environment:
+      - SERVICE_NAME=payment-service
+      - PORT=8002
+      - PYTHONPATH=.
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RABBITMQ_HOST=message-broker
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_PASS=${RABBITMQ_DEFAULT_PASS}
+      - IDEMPOTENCY_DB_PATH=/data/idempotency.db
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+    volumes:
+      - payment_idempotency:/data
+    networks:
+      - ecommerce-network
+    depends_on:
+      message-broker:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
