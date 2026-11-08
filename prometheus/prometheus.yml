@@ -1,0 +1,13 @@
+# Coleta de métricas dos microsserviços, a cada 5 segundos
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: middleware-services
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - order-service:8000
+          - catalog-service:8001
+          - notification-service:8002
