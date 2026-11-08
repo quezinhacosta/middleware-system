@@ -1,3 +1,4 @@
+import os
 import socket
 
 from fastapi import APIRouter, Response, status
@@ -7,11 +8,9 @@ router = APIRouter(prefix="/health", tags=["Healthcheck"])
 
 
 def check_rabbitmq() -> bool:
-    """
-    Testa a conectividade com o RabbitMQ (exemplo usando socket na porta padrão 5672).
-    """
-    host = "message-broker"
-    port = 5672
+    """Testa a conectividade com o RabbitMQ lendo host e porta do ambiente/config."""
+    host = os.getenv("RABBITMQ_HOST", "message-broker")
+    port = int(os.getenv("RABBITMQ_PORT", "5672"))
     try:
         with socket.create_connection((host, port), timeout=2):
             return True
