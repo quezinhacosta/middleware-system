@@ -90,11 +90,20 @@ class OrderRequest(BaseModel):
     payment_method: str = Field(default="PIX")
 
 
+from middleware.observability.correlation import CorrelationIdMiddleware
+from middleware.observability.logging import configure_logging
+
+configure_logging(
+    service=os.environ.get("SERVICE_NAME", "order-service"),
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+)
+
 app = FastAPI(
     title="Order Service",
     description="Microsserviço de gestão e checkout de pedidos do e-commerce",
     version="0.1.0",
 )
+app.add_middleware(CorrelationIdMiddleware)
 
 app.include_router(health_router)
 register_timeout_handler(app)
