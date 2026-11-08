@@ -108,7 +108,11 @@ async def test_fallback_acionado_quando_circuit_breaker_abre(
 
     assert r1 == {"items": [], "degraded": True}
     assert r2 == {"items": [], "degraded": True}
-    eventos = [json.loads(r.message) for r in caplog.records]
+    eventos = [
+        json.loads(r.message)
+        for r in caplog.records
+        if r.name == "middleware.resilience.fallback"
+    ]
     motivos = [e["reason"] for e in eventos]
     assert "ConnectError" in motivos
     assert "CircuitBreakerOpenException" in motivos
