@@ -87,6 +87,10 @@ class CircuitBreaker:
         except self._expected:
             self._on_failure(is_canary)
             raise
+        except (TypeError, KeyError, AttributeError, NameError, SyntaxError):
+            # Erros de código interno da aplicação não devem ser computados como sucesso do serviço
+            self._on_abort(is_canary)
+            raise
         except Exception:
             # O serviço respondeu (ex.: erro de negócio): não é falha de infra.
             self._on_success(is_canary)
@@ -106,6 +110,10 @@ class CircuitBreaker:
             result = await func(*args, **kwargs)
         except self._expected:
             self._on_failure(is_canary)
+            raise
+        except (TypeError, KeyError, AttributeError, NameError, SyntaxError):
+            # Erros de código interno da aplicação não devem ser computados como sucesso do serviço
+            self._on_abort(is_canary)
             raise
         except Exception:
             self._on_success(is_canary)
