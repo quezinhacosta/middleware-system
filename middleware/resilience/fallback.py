@@ -13,7 +13,7 @@ import inspect
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import httpx
 
@@ -23,6 +23,7 @@ from middleware.resilience.exceptions import MiddlewareTimeoutError
 logger = logging.getLogger("middleware.resilience.fallback")
 
 T = TypeVar("T")
+F = TypeVar("F", bound=Callable[..., Any])
 
 DEFAULT_FALLBACK_EXCEPTIONS: tuple[type[BaseException], ...] = (
     CircuitBreakerOpenException,
@@ -122,20 +123,20 @@ class FallbackPolicy:
             _log_fallback(name, exc)
             return await _invoke_async_handler(self._handler, *args, **kwargs)
 
-    def __call__(self, func: Callable[..., Any]) -> Callable[..., Any]:
+    def __call__(self, func: F) -> F:
         if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 return await self.call_async(func, *args, **kwargs)
 
-            return async_wrapper
+            return cast(F, async_wrapper)
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             return self.call(func, *args, **kwargs)
 
-        return wrapper
+        return cast(F, wrapper)
 
 
 def with_fallback(
