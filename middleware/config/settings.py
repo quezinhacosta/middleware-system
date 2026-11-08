@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,10 +50,12 @@ class Settings(BaseSettings):
     )
     RABBITMQ_USER: str = Field(
         default="guest",
+        validation_alias=AliasChoices("RABBITMQ_USER", "RABBITMQ_DEFAULT_USER"),
         description="Usuário de autenticação no broker",
     )
     RABBITMQ_PASS: str = Field(
         default="guest",
+        validation_alias=AliasChoices("RABBITMQ_PASS", "RABBITMQ_DEFAULT_PASS"),
         description="Senha de autenticação no broker",
     )
 

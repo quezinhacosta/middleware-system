@@ -97,9 +97,13 @@ class SqliteIdempotencyStore:
 
         # autocommit: as transações são controladas à mão (BEGIN IMMEDIATE)
         self._conn = sqlite3.connect(
-            path, timeout=5.0, check_same_thread=False, isolation_level=None
+            path, timeout=15.0, check_same_thread=False, isolation_level=None
         )
         with self._lock:
+            # WAL mode permite leituras concorrentes sem bloquear escritas
+            if path != ":memory:":
+                self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA busy_timeout=15000")
             self._conn.execute(
                 "CREATE TABLE IF NOT EXISTS idempotency ("
                 "key TEXT PRIMARY KEY, state TEXT NOT NULL, expires_at REAL NOT NULL)"
@@ -256,7 +260,7 @@ class IdempotentConsumerInterceptor:
 
     def _extract_event_id(self, envelope: dict) -> str:
         value = envelope.get(self._key)
-        if isinstance(value, bool) or not isinstance(value, (str, int)):
+        if isinstance(value, bool) or not isinstance(value, str | int):
             raise UnrecoverableError(
                 f"campo '{self._key}' ausente ou inválido no envelope"
             )

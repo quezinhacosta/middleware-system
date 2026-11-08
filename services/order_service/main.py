@@ -33,11 +33,3 @@ def read_root() -> dict[str, str]:
         "status": "running",
         "environment": settings.ENVIRONMENT,
     }
-
-
-@app.get("/health")
-def healthcheck() -> dict[str, str]:
-    return {
-        "status": "healthy",
-        "service": settings.SERVICE_NAME,
-    }
