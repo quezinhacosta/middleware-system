@@ -1,10 +1,14 @@
 import json
+import logging
 import os
+from typing import Any
 
 import pika
 
+logger = logging.getLogger("payment-service.publisher")
+
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "message-broker")
-RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))
+RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
 RABBITMQ_PASS = os.getenv("RABBITMQ_PASS", "guest")
 
@@ -14,26 +18,29 @@ parameters = pika.ConnectionParameters(
 )
 
 
-def publish_event(event_data: dict):
-    """
-    Publica o evento de resultado do pagamento no RabbitMQ.
-    """
+def publish_event(event_data: dict[str, Any]) -> None:
+    """Publica o evento de resultado do pagamento no RabbitMQ garantindo fechamento da conexão."""
     connection = pika.BlockingConnection(parameters)
-    channel = connection.channel()
+    try:
+        channel = connection.channel()
+        status_queue = str(event_data["status"])
 
-    # Usaremos um exchange do tipo 'topic' ou uma fila direta dependendo da arquitetura.
-    # Para simplicidade, vamos publicar diretamente em uma fila de saída ou exchange.
-    status_queue = event_data["status"]  # ex: 'payment.approved' ou 'payment.rejected'
+        channel.queue_declare(queue=status_queue, durable=True)
 
-    channel.queue_declare(queue=status_queue, durable=True)
-
-    channel.basic_publish(
-        exchange="",
-        routing_key=status_queue,
-        body=json.dumps(event_data),
-        properties=pika.BasicProperties(
-            delivery_mode=2,  # Torna a mensagem persistente
-        ),
-    )
-    print(f" [x] Evento publicado: {status_queue} -> {event_data['payment_id']}")
-    connection.close()
+        channel.basic_publish(
+            exchange="",
+            routing_key=status_queue,
+            body=json.dumps(event_data),
+            properties=pika.BasicProperties(
+                delivery_mode=2,
+            ),
+        )
+        logger.info(
+            "Evento publicado: %s -> %s", status_queue, event_data.get("payment_id")
+        )
+    finally:
+        try:
+            if connection.is_open:
+                connection.close()
+        except Exception:
+            pass

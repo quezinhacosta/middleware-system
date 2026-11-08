@@ -203,7 +203,12 @@ class EventConsumer(ABC):
                     delay_s=delay,
                     error_type=type(exc).__name__,
                 )
-                self._sleep(delay)
+                # Mantém o heartbeat do broker ativo processando eventos de I/O durante o backoff
+                conn = getattr(ch, "connection", None)
+                if conn is not None and hasattr(conn, "sleep"):
+                    conn.sleep(delay)
+                else:
+                    self._sleep(delay)
             except Exception as exc:
                 self._dead_letter(
                     ch, tag, reason="unrecoverable_error", attempts=attempt, error=exc
