@@ -5,11 +5,11 @@ from collections.abc import Iterator
 
 import pytest
 
+from middleware.observability.correlation import correlation_id_var
 from middleware.observability.logging import (
     CorrelationIdFilter,
     JsonLogFormatter,
     configure_logging,
-    correlation_id_var,
 )
 
 

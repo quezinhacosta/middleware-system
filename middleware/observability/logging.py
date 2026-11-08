@@ -3,12 +3,10 @@
 import json
 import logging
 import logging.config
-from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
-# Preenchido pelo interceptor de Correlation ID (issue de propagação)
-correlation_id_var: ContextVar[str | None] = ContextVar("correlation_id", default=None)
+from middleware.observability.correlation import correlation_id_var
 
 # Campos extras aceitos em `logger.info(..., extra={...})`
 EXTRA_FIELDS = (
