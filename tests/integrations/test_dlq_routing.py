@@ -115,6 +115,7 @@ def rabbitmq_channel():
             )
 
 
+@pytest.mark.integration
 def test_rabbitmq_roteia_nack_para_dlq(rabbitmq_channel):
     topology = Topology(
         exchange="test.integration.ex",
