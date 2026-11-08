@@ -2,7 +2,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from prometheus_client import CollectorRegistry
 
-from middleware.observability.metrics import MetricsCollector, MetricsMiddleware
+from middleware.observability.metrics import (
+    MetricsCollector,
+    MetricsMiddleware,
+    build_metrics_router,
+)
 
 
 def build_app(collector: MetricsCollector) -> FastAPI:
@@ -116,3 +120,18 @@ def test_conta_mensagens_processadas_por_fila() -> None:
     )
     assert ok == 2
     assert error == 1
+
+
+def test_endpoint_metrics_expoe_formato_prometheus() -> None:
+    collector = make_collector()
+    app = build_app(collector)
+    app.include_router(build_metrics_router(collector))
+    client = TestClient(app)
+
+    client.get("/orders/1")
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "http_requests_total" in response.text
+    assert "http_request_duration_seconds_bucket" in response.text
