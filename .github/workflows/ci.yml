@@ -47,11 +47,6 @@ jobs:
             echo "Nenhum arquivo Python (.py) encontrado ainda no projeto. Pulando Mypy temporariamente."
           fi
 
-      - name: Executar Testes Automatizados (se existirem)
-        run: |
-          if [ -d "tests" ]; then
-            pytest
-          else
-            echo "Diretorio tests/ sera implementado nas proximas issues. Pulando execucao de testes."
-          fi
+      - name: Run tests
+        run: python -m pytest tests -v
 

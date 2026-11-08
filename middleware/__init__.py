@@ -1,6 +1,7 @@
-"""Camada Central
+from .resilience.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerOpenException,
+    CircuitState,
+)
 
-Módulos para resiliência, segurança, observabilidade e transporte.
-"""
-
-__version__ = "0.1.0"
+__all__ = ["CircuitBreaker", "CircuitBreakerOpenException", "CircuitState"]
