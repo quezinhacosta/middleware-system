@@ -161,9 +161,9 @@ def test_rotas_order_service_retornam_http_200_com_degraded_quando_parceiros_cae
             "/payments", json={"product_id": 1, "quantity": 2, "payment_method": "PIX"}
         )
         resp_order = client.post(
-            "/orders", 
+            "/orders",
             json={"product_id": 1, "quantity": 1, "payment_method": "PIX"},
-            headers={"Authorization": "Bearer role=customer"}
+            headers={"Authorization": "Bearer role=customer"},
         )
 
     assert resp_rec.status_code == 200
