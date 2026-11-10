@@ -48,26 +48,20 @@ class DistributedHttpClient:
             follow_redirects=False,
         )
 
-    def _prepare_headers(self, headers: dict[str, str] | None = None) -> dict[str, str]:
+    def _prepare_headers(
+        self, headers: dict[str, str] | httpx.Headers | None = None
+    ) -> httpx.Headers:
         """Injeta automaticamente headers de rastreamento e autorização do contexto."""
-        prepared: dict[str, str] = dict(headers or {})
+        prepared = httpx.Headers(headers or {})
 
         # Injeta X-Correlation-ID do contexto se não explicitado
         correlation_id = get_correlation_id()
-        if (
-            correlation_id
-            and CORRELATION_HEADER not in prepared
-            and CORRELATION_HEADER.lower() not in [k.lower() for k in prepared]
-        ):
+        if correlation_id and CORRELATION_HEADER not in prepared:
             prepared[CORRELATION_HEADER] = correlation_id
 
         # Injeta Authorization do contexto se não explicitado
         auth_token = get_auth_token()
-        if (
-            auth_token
-            and "Authorization" not in prepared
-            and "authorization" not in [k.lower() for k in prepared]
-        ):
+        if auth_token and "Authorization" not in prepared:
             header_value = (
                 auth_token
                 if auth_token.lower().startswith("bearer ")
