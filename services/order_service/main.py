@@ -253,6 +253,33 @@ async def reserve_catalog_stock(product_id: str, quantity: int) -> dict[str, Any
         return data
 
 
+async def release_catalog_stock(product_id: str, quantity: int) -> dict[str, Any] | None:
+    """Compensa/estorna reserva de estoque no Catalog Service via DistributedHttpClient (SAGA)."""
+    try:
+        async with DistributedHttpClient() as client:
+            resp = await client.request(
+                "POST",
+                f"{CATALOG_SERVICE_URL}/products/{product_id}/release",
+                json={"quantity": quantity},
+            )
+            if resp.is_success:
+                data: dict[str, Any] = resp.json()
+                return data
+            logger.warning(
+                "Falha ao liberar estoque do produto %s (status %s): %s",
+                product_id,
+                resp.status_code,
+                resp.text,
+            )
+    except Exception as exc:
+        logger.error(
+            "Erro inesperado ao compensar estoque do produto %s: %s",
+            product_id,
+            exc,
+        )
+    return None
+
+
 @with_fallback(_payment_fallback)
 async def request_payment_processing(order_payload: dict[str, Any]) -> dict[str, Any]:
     async def _call() -> dict[str, Any]:
@@ -352,25 +379,34 @@ async def create_order(
 
     # 1. Validação com o Catalog Service via middleware síncrono (reserva de estoque)
     total_amount = 0.0
-    for item in items:
-        # Reserva o item no catálogo e obtém os dados do produto diretamente na resposta
-        try:
-            reservation = await reserve_catalog_stock(item.product_id, item.quantity)
-            item.unit_price = float(reservation.get("unit_price") or 100.0)
-        except HTTPException:
-            raise
-        except Exception as exc:
-            logger.warning(
-                "Falha ao contatar catalog-service diretamente para reserva: %s", exc
-            )
-            # Em modo fallback, consulta cache ou usa valor padrão
+    reserved_items: list[tuple[str, int]] = []
+    try:
+        for item in items:
+            # Reserva o item no catálogo e obtém os dados do produto diretamente na resposta
             try:
-                prod_details = await fetch_product_details(item.product_id)
-                item.unit_price = float(prod_details.get("price", 100.0))
-            except Exception:
-                item.unit_price = 100.0
+                reservation = await reserve_catalog_stock(item.product_id, item.quantity)
+                item.unit_price = float(reservation.get("unit_price") or 100.0)
+                reserved_items.append((item.product_id, item.quantity))
+            except HTTPException:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Falha ao contatar catalog-service diretamente para reserva: %s", exc
+                )
+                # Em modo fallback, consulta cache ou usa valor padrão
+                try:
+                    prod_details = await fetch_product_details(item.product_id)
+                    item.unit_price = float(prod_details.get("price", 100.0))
+                except Exception:
+                    item.unit_price = 100.0
 
-        total_amount += item.unit_price * item.quantity
+            total_amount += item.unit_price * item.quantity
+    except Exception:
+        # Transação Compensatória (SAGA): se falhar em qualquer item posterior,
+        # estorna o estoque dos itens que já haviam sido reservados
+        for res_pid, res_qty in reserved_items:
+            await release_catalog_stock(res_pid, res_qty)
+        raise
 
     # 2. Ao ser aceito, o pedido recebe status PENDING e ID UUID v4
     order_id = str(uuid.uuid4())
