@@ -7,8 +7,8 @@ from typing import Any
 
 import httpx
 import pika
-from fastapi import Depends, FastAPI
-from pydantic import BaseModel, Field, ValidationError
+from fastapi import Depends, FastAPI, HTTPException, status
+from pydantic import ValidationError
 
 from middleware.auth.rbac import UserIdentity, require_roles
 from middleware.config import Settings, get_settings
@@ -22,6 +22,13 @@ from middleware.resilience.fallback import with_fallback
 from middleware.resilience.handlers import register_timeout_handler
 from middleware.resilience.retry import RetryPolicy
 from middleware.transport.consumer import Topology, declare_topology
+from services.order_service.models import (
+    Order,
+    OrderCreateRequest,
+    OrderItem,
+    OrderStatus,
+)
+from services.order_service.repository import OrderRepository
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("order-service")
@@ -42,16 +49,19 @@ RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
 RABBITMQ_PASS = os.getenv("RABBITMQ_PASS", "guest")
 PAYMENT_QUEUE = os.getenv("PAYMENT_QUEUE", "order.created")
 
+# Repositório em memória thread-safe para armazenar pedidos
+order_repository = OrderRepository()
+
 # Cache local de contingência para produtos quando o Catalog Service estiver indisponível
-LOCAL_PRODUCT_CACHE: dict[int, dict[str, Any]] = {
-    1: {
-        "id": 1,
+LOCAL_PRODUCT_CACHE: dict[str, dict[str, Any]] = {
+    "1": {
+        "id": "1",
         "name": "Notebook Pro 16 (Cache Local)",
         "price": 7500.00,
         "in_stock": True,
     },
-    2: {
-        "id": 2,
+    "2": {
+        "id": "2",
         "name": "Monitor Ultrawide 34 (Cache Local)",
         "price": 2800.00,
         "in_stock": True,
@@ -86,13 +96,6 @@ payment_breaker = CircuitBreaker(
 
 retry_policy = RetryPolicy(max_attempts=2, base_delay=0.1, max_delay=0.5)
 
-
-class OrderRequest(BaseModel):
-    product_id: int = Field(default=1, ge=1)
-    quantity: int = Field(default=1, ge=1)
-    payment_method: str = Field(default="PIX")
-
-
 configure_logging(
     service=os.environ.get("SERVICE_NAME", "order-service"),
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -120,8 +123,9 @@ def _recommendations_fallback() -> dict[str, Any]:
     }
 
 
-def _product_details_fallback(product_id: int) -> dict[str, Any]:
-    cached = LOCAL_PRODUCT_CACHE.get(product_id)
+def _product_details_fallback(product_id: int | str) -> dict[str, Any]:
+    pid_str = str(product_id)
+    cached = LOCAL_PRODUCT_CACHE.get(pid_str)
     if cached is not None:
         return {
             **cached,
@@ -129,8 +133,8 @@ def _product_details_fallback(product_id: int) -> dict[str, Any]:
             "source": "local_cache",
         }
     return {
-        "id": product_id,
-        "name": f"Produto #{product_id} (dados estendidos indisponíveis)",
+        "id": pid_str,
+        "name": f"Produto #{pid_str} (dados estendidos indisponíveis)",
         "price": 100.00,
         "in_stock": True,
         "degraded": True,
@@ -210,18 +214,70 @@ async def fetch_catalog_recommendations() -> dict[str, Any]:
 
 
 @with_fallback(_product_details_fallback)
-async def fetch_product_details(product_id: int) -> dict[str, Any]:
+async def fetch_product_details(product_id: int | str) -> dict[str, Any]:
+    pid_str = str(product_id)
+
     async def _call() -> dict[str, Any]:
         async with DistributedHttpClient() as client:
-            resp = await client.get_catalog(
-                f"{CATALOG_SERVICE_URL}/products/{product_id}"
-            )
+            resp = await client.get_catalog(f"{CATALOG_SERVICE_URL}/products/{pid_str}")
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()
-            LOCAL_PRODUCT_CACHE[product_id] = data
+            LOCAL_PRODUCT_CACHE[pid_str] = data
             return {**data, "degraded": False, "source": "catalog-service"}
 
     return await retry_policy.call_async(catalog_breaker.call_async, _call)
+
+
+async def reserve_catalog_stock(product_id: str, quantity: int) -> dict[str, Any]:
+    """Chama o endpoint de reserva de estoque no Catalog Service via DistributedHttpClient."""
+    async with DistributedHttpClient() as client:
+        resp = await client.request(
+            "POST",
+            f"{CATALOG_SERVICE_URL}/products/{product_id}/reserve",
+            json={"quantity": quantity},
+        )
+        if resp.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Produto {product_id} não encontrado no catálogo",
+            )
+        if resp.status_code == 409:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Estoque insuficiente no catálogo para o produto {product_id}",
+            )
+        resp.raise_for_status()
+        data: dict[str, Any] = resp.json()
+        return data
+
+
+async def release_catalog_stock(
+    product_id: str, quantity: int
+) -> dict[str, Any] | None:
+    """Compensa/estorna reserva de estoque no Catalog Service via DistributedHttpClient (SAGA)."""
+    try:
+        async with DistributedHttpClient() as client:
+            resp = await client.request(
+                "POST",
+                f"{CATALOG_SERVICE_URL}/products/{product_id}/release",
+                json={"quantity": quantity},
+            )
+            if resp.is_success:
+                data: dict[str, Any] = resp.json()
+                return data
+            logger.warning(
+                "Falha ao liberar estoque do produto %s (status %s): %s",
+                product_id,
+                resp.status_code,
+                resp.text,
+            )
+    except Exception as exc:
+        logger.error(
+            "Erro inesperado ao compensar estoque do produto %s: %s",
+            product_id,
+            exc,
+        )
+    return None
 
 
 @with_fallback(_payment_fallback)
@@ -251,14 +307,6 @@ def read_root() -> dict[str, str]:
     }
 
 
-@app.get("/health")
-def healthcheck() -> dict[str, str]:
-    return {
-        "status": "healthy",
-        "service": settings.SERVICE_NAME,
-    }
-
-
 @app.get("/catalog/recommendations")
 async def get_recommendations_endpoint() -> dict[str, Any]:
     return await fetch_catalog_recommendations()
@@ -270,13 +318,14 @@ async def get_product_details_endpoint(product_id: int) -> dict[str, Any]:
 
 
 @app.post("/payments")
-async def create_payment_endpoint(order: OrderRequest) -> dict[str, Any]:
+async def create_payment_endpoint(order: OrderCreateRequest) -> dict[str, Any]:
     order_id = str(uuid.uuid4())
     event_id = str(uuid.uuid4())
+    pid = str(order.product_id or 1)
     payload: dict[str, Any] = {
         "event_id": event_id,
         "order_id": order_id,
-        "product_id": order.product_id,
+        "product_id": pid,
         "quantity": order.quantity,
         "amount": round(100.0 * order.quantity, 2),
         "payment_method": order.payment_method,
@@ -284,36 +333,135 @@ async def create_payment_endpoint(order: OrderRequest) -> dict[str, Any]:
     return await request_payment_processing(payload)
 
 
+@app.get("/orders", response_model=list[Order])
+def list_orders(
+    user: UserIdentity = Depends(require_roles(["customer", "admin"])),
+) -> list[Order]:
+    """Lista os pedidos do usuário autenticado (ou todos se for admin)."""
+    if "admin" in user.roles:
+        return order_repository.list_all()
+    return order_repository.list_by_customer(user.user_id)
+
+
+@app.get("/orders/{order_id}", response_model=Order)
+def get_order_by_id(
+    order_id: str,
+    user: UserIdentity = Depends(require_roles(["customer", "admin"])),
+) -> Order:
+    """Consulta os detalhes e situação atual de um pedido específico."""
+    order = order_repository.get_by_id(order_id)
+    if order is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pedido {order_id} não encontrado",
+        )
+    if "admin" not in user.roles and order.customer_id != user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso não autorizado ao pedido solicitado",
+        )
+    return order
+
+
 @app.post("/orders")
 async def create_order(
-    order: OrderRequest,
+    order_in: OrderCreateRequest,
     user: UserIdentity = Depends(require_roles(["customer", "admin"])),
 ) -> dict[str, Any]:
-    product = await fetch_product_details(order.product_id)
-    logger.info(f"Pedido criado pelo usuário: {user.user_id}")
-    unit_price = float(product.get("price", 100.0))
+    """Cria um novo pedido validando disponibilidade no catálogo e publicando evento."""
+    # Normaliza lista de itens
+    items: list[OrderItem] = []
+    if order_in.items:
+        items = order_in.items
+    else:
+        pid = str(order_in.product_id or "1")
+        items = [OrderItem(product_id=pid, quantity=order_in.quantity, unit_price=0.0)]
+
+    # 1. Validação com o Catalog Service via middleware síncrono (reserva de estoque)
+    # Decisão de Arquitetura (IMP-01): Se o catálogo responde com erro de negócio (404 inexistente
+    # ou 409 sem estoque), o pedido é abortado. Em caso de partição de rede/indisponibilidade
+    # transitória, adota-se disponibilidade (AP) com modo degradado via cache local de contingência.
+    total_amount = 0.0
+    catalog_degraded = False
+    reserved_items: list[tuple[str, int]] = []
+    try:
+        for item in items:
+            # Reserva o item no catálogo e obtém os dados do produto diretamente na resposta
+            try:
+                reservation = await reserve_catalog_stock(
+                    item.product_id, item.quantity
+                )
+                if reservation.get("unit_price") is not None:
+                    item.unit_price = float(reservation["unit_price"])
+                elif item.unit_price <= 0:
+                    try:
+                        prod_details = await fetch_product_details(item.product_id)
+                        item.unit_price = float(prod_details.get("price", 100.0))
+                    except Exception:
+                        item.unit_price = 100.0
+                reserved_items.append((item.product_id, item.quantity))
+            except HTTPException:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Falha ao contatar catalog-service diretamente para reserva: %s",
+                    exc,
+                )
+                catalog_degraded = True
+                # Em modo fallback degradado, consulta cache local ou usa valor padrão
+                if item.unit_price <= 0:
+                    try:
+                        prod_details = await fetch_product_details(item.product_id)
+                        item.unit_price = float(prod_details.get("price", 100.0))
+                    except Exception:
+                        item.unit_price = 100.0
+
+            total_amount += item.unit_price * item.quantity
+    except Exception:
+        # Transação Compensatória (SAGA): se falhar em qualquer item posterior,
+        # estorna o estoque dos itens que já haviam sido reservados
+        for res_pid, res_qty in reserved_items:
+            await release_catalog_stock(res_pid, res_qty)
+        raise
+
+    # 2. Ao ser aceito, o pedido recebe status PENDING e ID UUID v4
     order_id = str(uuid.uuid4())
     event_id = str(uuid.uuid4())
 
+    new_order = Order(
+        id=order_id,
+        customer_id=user.user_id,
+        items=items,
+        total_amount=round(total_amount, 2),
+        status=OrderStatus.PENDING,
+        payment_method=order_in.payment_method,
+    )
+    # Persiste no repositório thread-safe
+    order_repository.save(new_order)
+    logger.info(
+        "Pedido %s criado com status PENDING para usuário %s", order_id, user.user_id
+    )
+
+    # 3. Dispara evento de pagamento (assíncrono no broker com fallback)
     envelope: dict[str, Any] = {
         "event_id": event_id,
         "order_id": order_id,
-        "product_id": order.product_id,
-        "quantity": order.quantity,
-        "amount": round(unit_price * order.quantity, 2),
-        "payment_method": order.payment_method,
+        "product_id": items[0].product_id,
+        "quantity": items[0].quantity,
+        "amount": round(total_amount, 2),
+        "payment_method": order_in.payment_method,
     }
 
     payment_info = await request_payment_processing(envelope)
-    degraded = bool(product.get("degraded") or payment_info.get("degraded"))
+    degraded = bool(payment_info.get("degraded")) or catalog_degraded
 
     return {
         "order_id": order_id,
         "event_id": event_id,
-        "product": product,
-        "quantity": order.quantity,
-        "total_amount": envelope["amount"],
-        "status": payment_info.get("status", "PAYMENT_PENDING"),
+        "customer_id": user.user_id,
+        "items": [item.model_dump() for item in items],
+        "total_amount": round(total_amount, 2),
+        "status": new_order.status.value,
         "degraded": degraded,
         "payment": payment_info,
     }
