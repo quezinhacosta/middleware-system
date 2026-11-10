@@ -3,7 +3,16 @@ import asyncio
 import httpx
 import pytest
 
-from middleware.auth.context import set_auth_token
+from middleware.auth.context import (
+    AuthContextMiddleware,
+    auth_token_var,
+    set_auth_token,
+)
+from middleware.auth.service_auth import (
+    SERVICE_KEY_HEADER,
+    ServiceAuthenticator,
+    ServiceTokenProvider,
+)
 from middleware.http.distributed_http_client import DistributedHttpClient
 from middleware.observability.correlation import CORRELATION_HEADER, correlation_id_var
 from middleware.resilience.exceptions import (
@@ -299,3 +308,74 @@ async def test_client_padrao_tem_headers_e_nao_segue_redirect():
     async with DistributedHttpClient(default_headers={"X-Teste": "1"}) as cliente:
         assert cliente._client.headers["X-Teste"] == "1"
         assert cliente._client.follow_redirects is False
+
+
+# ---------- validação de conflito de payloads ----------
+
+
+async def test_post_com_json_e_data_simultaneos_levanta_value_error():
+    async with fazer_cliente(lambda req: httpx.Response(200)) as cliente:
+        with pytest.raises(ValueError) as exc:
+            await cliente.post("http://svc/items", json={"k": 1}, data="raw-data")
+        assert "simultaneamente" in str(exc.value)
+
+
+async def test_put_com_json_e_data_simultaneos_levanta_value_error():
+    async with fazer_cliente(lambda req: httpx.Response(200)) as cliente:
+        with pytest.raises(ValueError) as exc:
+            await cliente.put("http://svc/items/1", json={"k": 1}, data="raw-data")
+        assert "simultaneamente" in str(exc.value)
+
+
+# ---------- injeção de token de serviço interno (S2S) ----------
+
+
+async def test_injecao_automatica_de_token_s2s_com_service_token_provider():
+    authenticator = ServiceAuthenticator(secret="test-s2s-secret", ttl_seconds=60)
+    provider = ServiceTokenProvider("order-service", authenticator)
+    capturado = {}
+
+    def handler(request):
+        capturado["headers"] = dict(request.headers)
+        return httpx.Response(200)
+
+    cliente_http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    async with DistributedHttpClient(
+        client=cliente_http, service_token_provider=provider
+    ) as cliente:
+        await cliente.get_catalog("http://catalog/products")
+
+    assert SERVICE_KEY_HEADER.lower() in capturado["headers"]
+    token_s2s = capturado["headers"][SERVICE_KEY_HEADER.lower()]
+    identity = authenticator.validate_token(
+        token_s2s, expected_audience="catalog-service", allowed_callers={"order-service"}
+    )
+    assert identity.caller == "order-service"
+
+
+# ---------- ciclo de vida do AuthContextMiddleware ----------
+
+
+async def test_auth_context_middleware_define_e_reseta_token_no_contexto():
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
+    async def app(scope, receive, send):
+        request = Request(scope, receive)
+        # Durante o processamento da requisição, auth_token_var deve conter o token
+        token_atual = auth_token_var.get()
+        response = JSONResponse({"token_no_contexto": token_atual, "path": request.url.path})
+        await response(scope, receive, send)
+
+    middleware_app = AuthContextMiddleware(app)
+
+    transport = httpx.ASGITransport(app=middleware_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        resp = await client.get(
+            "/test", headers={"Authorization": "Bearer token-asgi-seguro-123"}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["token_no_contexto"] == "token-asgi-seguro-123"
+
+    # Após o término da requisição ASGI, o token deve ter sido resetado
+    assert auth_token_var.get() is None
