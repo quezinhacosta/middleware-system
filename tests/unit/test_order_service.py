@@ -29,6 +29,7 @@ def test_post_order_cria_pedido_com_uuid_v4_e_status_pending(
             "status": "reserved",
             "product_id": product_id,
             "reserved_quantity": quantity,
+            "unit_price": 5000.0,
         }
 
     async def mock_details(product_id: int) -> dict[str, Any]:

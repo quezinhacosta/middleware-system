@@ -391,7 +391,14 @@ async def create_order(
                 reservation = await reserve_catalog_stock(
                     item.product_id, item.quantity
                 )
-                item.unit_price = float(reservation.get("unit_price") or 100.0)
+                if reservation.get("unit_price") is not None:
+                    item.unit_price = float(reservation["unit_price"])
+                elif item.unit_price <= 0:
+                    try:
+                        prod_details = await fetch_product_details(item.product_id)
+                        item.unit_price = float(prod_details.get("price", 100.0))
+                    except Exception:
+                        item.unit_price = 100.0
                 reserved_items.append((item.product_id, item.quantity))
             except HTTPException:
                 raise
@@ -402,11 +409,12 @@ async def create_order(
                 )
                 catalog_degraded = True
                 # Em modo fallback degradado, consulta cache local ou usa valor padrão
-                try:
-                    prod_details = await fetch_product_details(item.product_id)
-                    item.unit_price = float(prod_details.get("price", 100.0))
-                except Exception:
-                    item.unit_price = 100.0
+                if item.unit_price <= 0:
+                    try:
+                        prod_details = await fetch_product_details(item.product_id)
+                        item.unit_price = float(prod_details.get("price", 100.0))
+                    except Exception:
+                        item.unit_price = 100.0
 
             total_amount += item.unit_price * item.quantity
     except Exception:
