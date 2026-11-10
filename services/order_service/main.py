@@ -53,15 +53,15 @@ PAYMENT_QUEUE = os.getenv("PAYMENT_QUEUE", "order.created")
 order_repository = OrderRepository()
 
 # Cache local de contingência para produtos quando o Catalog Service estiver indisponível
-LOCAL_PRODUCT_CACHE: dict[int, dict[str, Any]] = {
-    1: {
-        "id": 1,
+LOCAL_PRODUCT_CACHE: dict[str, dict[str, Any]] = {
+    "1": {
+        "id": "1",
         "name": "Notebook Pro 16 (Cache Local)",
         "price": 7500.00,
         "in_stock": True,
     },
-    2: {
-        "id": 2,
+    "2": {
+        "id": "2",
         "name": "Monitor Ultrawide 34 (Cache Local)",
         "price": 2800.00,
         "in_stock": True,
@@ -123,8 +123,9 @@ def _recommendations_fallback() -> dict[str, Any]:
     }
 
 
-def _product_details_fallback(product_id: int) -> dict[str, Any]:
-    cached = LOCAL_PRODUCT_CACHE.get(product_id)
+def _product_details_fallback(product_id: int | str) -> dict[str, Any]:
+    pid_str = str(product_id)
+    cached = LOCAL_PRODUCT_CACHE.get(pid_str)
     if cached is not None:
         return {
             **cached,
@@ -132,8 +133,8 @@ def _product_details_fallback(product_id: int) -> dict[str, Any]:
             "source": "local_cache",
         }
     return {
-        "id": product_id,
-        "name": f"Produto #{product_id} (dados estendidos indisponíveis)",
+        "id": pid_str,
+        "name": f"Produto #{pid_str} (dados estendidos indisponíveis)",
         "price": 100.00,
         "in_stock": True,
         "degraded": True,
@@ -213,15 +214,17 @@ async def fetch_catalog_recommendations() -> dict[str, Any]:
 
 
 @with_fallback(_product_details_fallback)
-async def fetch_product_details(product_id: int) -> dict[str, Any]:
+async def fetch_product_details(product_id: int | str) -> dict[str, Any]:
+    pid_str = str(product_id)
+
     async def _call() -> dict[str, Any]:
         async with DistributedHttpClient() as client:
             resp = await client.get_catalog(
-                f"{CATALOG_SERVICE_URL}/products/{product_id}"
+                f"{CATALOG_SERVICE_URL}/products/{pid_str}"
             )
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()
-            LOCAL_PRODUCT_CACHE[product_id] = data
+            LOCAL_PRODUCT_CACHE[pid_str] = data
             return {**data, "degraded": False, "source": "catalog-service"}
 
     return await retry_policy.call_async(catalog_breaker.call_async, _call)
