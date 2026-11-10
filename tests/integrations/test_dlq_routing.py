@@ -142,10 +142,18 @@ def test_rabbitmq_roteia_nack_para_dlq(rabbitmq_channel):
 
     rabbitmq_channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False)
 
-    # 4. Verifica se o RabbitMQ encaminhou para a DLQ
-    dlq_method_frame, _, dlq_body = rabbitmq_channel.basic_get(
-        queue=topology.dlq, auto_ack=True
-    )
+    # 4. Verifica se o RabbitMQ encaminhou para a DLQ (aguardando o roteamento assíncrono)
+    dlq_method_frame = None
+    dlq_body = None
+    
+    limite = time.time() + 5.0  # Aguarda no máximo 5 segundos
+    while time.time() < limite:
+        dlq_method_frame, _, dlq_body = rabbitmq_channel.basic_get(
+            queue=topology.dlq, auto_ack=True
+        )
+        if dlq_method_frame is not None:
+            break  # Achou a mensagem, sai do loop imediatamente
+        time.sleep(0.1)  # Espera 100ms e tenta de novo
 
-    assert dlq_method_frame is not None
+    assert dlq_method_frame is not None, "A mensagem não chegou na DLQ a tempo"
     assert dlq_body == b"{json-invalido}"
