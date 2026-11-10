@@ -1,12 +1,16 @@
 import logging
+import os
 import sys
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from pydantic import ValidationError
+from fastapi import Depends, FastAPI, HTTPException
+from pydantic import BaseModel, ValidationError
 
+from middleware.auth.rbac import UserIdentity, require_roles
 from middleware.config import Settings, get_settings
+from middleware.observability.correlation import CorrelationIdMiddleware
 from middleware.observability.health import router as health_router
+from middleware.observability.logging import configure_logging
 
 logger = logging.getLogger("catalog-service")
 
@@ -17,9 +21,6 @@ except ValidationError as exc:
         f"[FATAL] Erro ao carregar configuracoes obrigatorias do catalog-service: {exc}"
     )
     sys.exit(1)
-
-from middleware.observability.correlation import CorrelationIdMiddleware
-from middleware.observability.logging import configure_logging
 
 configure_logging(
     service=os.environ.get("SERVICE_NAME", "catalog-service"),
@@ -91,3 +92,26 @@ def get_product(product_id: int) -> dict[str, Any]:
     if product is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     return {**product, "degraded": False}
+
+
+class ProductCreate(BaseModel):
+    name: str
+    price: float
+    details: str
+
+
+@app.post("/products", status_code=201)
+def create_product(
+    product: ProductCreate,
+    user: UserIdentity = Depends(require_roles(["admin"])),
+) -> dict[str, Any]:
+    # Lógica simplificada de inserção
+    new_id = max(CATALOG_PRODUCTS.keys()) + 1 if CATALOG_PRODUCTS else 1
+    CATALOG_PRODUCTS[new_id] = {
+        "id": new_id,
+        "name": product.name,
+        "price": product.price,
+        "in_stock": True,
+        "details": product.details,
+    }
+    return {"message": f"Produto cadastrado por {user.user_id}", "product_id": new_id}

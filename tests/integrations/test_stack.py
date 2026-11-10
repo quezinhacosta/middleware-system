@@ -104,35 +104,6 @@ def _http_dentro_do_container(container, url):
     return r.stdout.strip()
 
 
-# ---------- fixture ----------
-
-
-@pytest.fixture(scope="session")
-def stack():
-    if not _docker_disponivel():
-        pytest.skip("Docker não está disponível (abra o Docker Desktop)")
-    existentes = _containers_existentes()
-    if existentes:
-        pytest.skip(
-            f"Já existem containers da stack ({', '.join(sorted(existentes))}). "
-            "Rode `make down` antes dos testes de integração."
-        )
-
-    try:
-        r = _compose(
-            "up", "--build", "-d", "--wait", "--wait-timeout", "240", timeout=900
-        )
-        if r.returncode != 0:
-            logs = _compose("logs", "--tail", "40").stdout
-            pytest.fail(
-                f"docker compose up falhou:\n{r.stderr[-1500:]}\n--- logs ---\n{logs[-3000:]}"
-            )
-        yield BASE_URL
-    finally:
-        # -v remove só o volume de teste (rabbitmq_data_test), graças ao override
-        _compose("down", "-v", "--remove-orphans")
-
-
 # ---------- testes ----------
 
 

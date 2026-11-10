@@ -102,7 +102,7 @@ services:
       - PORT=8001
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - RABBITMQ_HOST=${RABBITMQ_HOST:-message-broker}
+      - RABBITMQ_HOST=message-broker
       - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
       - RABBITMQ_USER=${RABBITMQ_DEFAULT_USER}
       - RABBITMQ_PASS=${RABBITMQ_DEFAULT_PASS}

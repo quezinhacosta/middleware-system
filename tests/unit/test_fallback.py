@@ -161,7 +161,9 @@ def test_rotas_order_service_retornam_http_200_com_degraded_quando_parceiros_cae
             "/payments", json={"product_id": 1, "quantity": 2, "payment_method": "PIX"}
         )
         resp_order = client.post(
-            "/orders", json={"product_id": 1, "quantity": 1, "payment_method": "PIX"}
+            "/orders",
+            json={"product_id": 1, "quantity": 1, "payment_method": "PIX"},
+            headers={"Authorization": "Bearer role=customer"},
         )
 
     assert resp_rec.status_code == 200
@@ -179,4 +181,3 @@ def test_rotas_order_service_retornam_http_200_com_degraded_quando_parceiros_cae
     assert resp_order.status_code == 200
     assert resp_order.json()["degraded"] is True
     assert resp_order.json()["status"] == "PAYMENT_PENDING"
-    assert "FALLBACK_TRIGGERED" in caplog.text

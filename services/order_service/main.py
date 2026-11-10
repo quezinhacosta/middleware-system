@@ -7,12 +7,15 @@ from typing import Any
 
 import httpx
 import pika
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from pydantic import BaseModel, Field, ValidationError
 
+from middleware.auth.rbac import UserIdentity, require_roles
 from middleware.config import Settings, get_settings
 from middleware.http.distributed_http_client import DistributedHttpClient
+from middleware.observability.correlation import CorrelationIdMiddleware
 from middleware.observability.health import router as health_router
+from middleware.observability.logging import configure_logging
 from middleware.resilience.circuit_breaker import CircuitBreaker
 from middleware.resilience.exceptions import MiddlewareTimeoutError
 from middleware.resilience.fallback import with_fallback
@@ -89,9 +92,6 @@ class OrderRequest(BaseModel):
     quantity: int = Field(default=1, ge=1)
     payment_method: str = Field(default="PIX")
 
-
-from middleware.observability.correlation import CorrelationIdMiddleware
-from middleware.observability.logging import configure_logging
 
 configure_logging(
     service=os.environ.get("SERVICE_NAME", "order-service"),
@@ -285,8 +285,12 @@ async def create_payment_endpoint(order: OrderRequest) -> dict[str, Any]:
 
 
 @app.post("/orders")
-async def create_order(order: OrderRequest) -> dict[str, Any]:
+async def create_order(
+    order: OrderRequest,
+    user: UserIdentity = Depends(require_roles(["customer", "admin"])),
+) -> dict[str, Any]:
     product = await fetch_product_details(order.product_id)
+    logger.info(f"Pedido criado pelo usuário: {user.user_id}")
     unit_price = float(product.get("price", 100.0))
     order_id = str(uuid.uuid4())
     event_id = str(uuid.uuid4())
