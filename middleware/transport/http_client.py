@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from middleware.auth.context import get_auth_token
+from middleware.auth.service_auth import SERVICE_KEY_HEADER, ServiceTokenProvider
 from middleware.observability.correlation import CORRELATION_HEADER, get_correlation_id
 from middleware.resilience.exceptions import (
     GatewayTimeoutException,
@@ -22,13 +23,19 @@ from middleware.resilience.timeout_config import Criticality, get_timeout
 
 
 class DistributedHttpClient:
-    """Cliente HTTP interno para chamadas entre microsserviços.
+    """Cliente HTTP interno para comunicação síncrona RPC entre microsserviços.
 
-    Encapsula o cliente HTTP assíncrono httpx.AsyncClient fornecendo:
+    Implementa o padrão de comunicação síncrona ponto a ponto (Request-Response)
+    da arquitetura distribuída através de corrotinas assíncronas não-bloqueantes
+    (httpx.AsyncClient), garantindo alta taxa de transferência e resiliência.
+
+    Recursos fornecidos:
     - Métodos semânticos get, post, put, delete e request genérico.
     - Injeção automática de cabeçalhos de rastreamento (X-Correlation-ID).
     - Injeção automática de credenciais do contexto da requisição (Authorization).
+    - Injeção de credenciais de serviço interno (S2S) via ServiceTokenProvider.
     - Mapeamento de falhas de transporte/socket em ServiceUnavailableException e GatewayTimeoutException.
+    - Validação de payload para prevenir ambiguidades (conflito json vs data).
     - Suporte a controle de timeout por criticidade.
     """
 
@@ -38,7 +45,9 @@ class DistributedHttpClient:
         default_headers: dict[str, str] | None = None,
         client: httpx.AsyncClient | None = None,
         max_connections: int = 100,
+        service_token_provider: ServiceTokenProvider | None = None,
     ) -> None:
+        self._service_token_provider = service_token_provider
         self._client = client or httpx.AsyncClient(
             headers=default_headers,
             limits=httpx.Limits(
@@ -49,7 +58,9 @@ class DistributedHttpClient:
         )
 
     def _prepare_headers(
-        self, headers: dict[str, str] | httpx.Headers | None = None
+        self,
+        headers: dict[str, str] | httpx.Headers | None = None,
+        target_audience: str | None = None,
     ) -> httpx.Headers:
         """Injeta automaticamente headers de rastreamento e autorização do contexto."""
         prepared = httpx.Headers(headers or {})
@@ -69,6 +80,13 @@ class DistributedHttpClient:
             )
             prepared["Authorization"] = header_value
 
+        # Injeta token de serviço interno (S2S) se provedor e audiência configurados
+        if self._service_token_provider and target_audience:
+            if SERVICE_KEY_HEADER not in prepared:
+                prepared[SERVICE_KEY_HEADER] = self._service_token_provider.get_token(
+                    target_audience
+                )
+
         return prepared
 
     async def request(
@@ -76,13 +94,14 @@ class DistributedHttpClient:
         method: str,
         url: str,
         criticality: Criticality = Criticality.DEFAULT,
-        headers: dict[str, str] | None = None,
+        headers: dict[str, str] | httpx.Headers | None = None,
+        target_audience: str | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """Executa requisição HTTP com mapeamento de falhas e prazos de resiliência."""
         limit = get_timeout(criticality)
         start = time.perf_counter()
-        req_headers = self._prepare_headers(headers)
+        req_headers = self._prepare_headers(headers, target_audience=target_audience)
 
         try:
             return await run_with_deadline(
@@ -121,8 +140,9 @@ class DistributedHttpClient:
         self,
         url: str,
         params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
+        headers: dict[str, str] | httpx.Headers | None = None,
         criticality: Criticality = Criticality.DEFAULT,
+        target_audience: str | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """Executa requisição HTTP GET com injeção de contexto e validação."""
@@ -132,6 +152,7 @@ class DistributedHttpClient:
             criticality=criticality,
             headers=headers,
             params=params,
+            target_audience=target_audience,
             **kwargs,
         )
 
@@ -140,11 +161,16 @@ class DistributedHttpClient:
         url: str,
         json: Any = None,
         data: Any = None,
-        headers: dict[str, str] | None = None,
+        headers: dict[str, str] | httpx.Headers | None = None,
         criticality: Criticality = Criticality.DEFAULT,
+        target_audience: str | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """Executa requisição HTTP POST com payload JSON ou form data."""
+        if json is not None and data is not None:
+            raise ValueError(
+                "Não é permitido enviar 'json' e 'data' simultaneamente na mesma requisição."
+            )
         return await self.request(
             "POST",
             url,
@@ -152,6 +178,7 @@ class DistributedHttpClient:
             headers=headers,
             json=json,
             data=data,
+            target_audience=target_audience,
             **kwargs,
         )
 
@@ -160,11 +187,16 @@ class DistributedHttpClient:
         url: str,
         json: Any = None,
         data: Any = None,
-        headers: dict[str, str] | None = None,
+        headers: dict[str, str] | httpx.Headers | None = None,
         criticality: Criticality = Criticality.DEFAULT,
+        target_audience: str | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """Executa requisição HTTP PUT com atualização de recurso."""
+        if json is not None and data is not None:
+            raise ValueError(
+                "Não é permitido enviar 'json' e 'data' simultaneamente na mesma requisição."
+            )
         return await self.request(
             "PUT",
             url,
@@ -172,6 +204,7 @@ class DistributedHttpClient:
             headers=headers,
             json=json,
             data=data,
+            target_audience=target_audience,
             **kwargs,
         )
 
@@ -179,8 +212,9 @@ class DistributedHttpClient:
         self,
         url: str,
         params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
+        headers: dict[str, str] | httpx.Headers | None = None,
         criticality: Criticality = Criticality.DEFAULT,
+        target_audience: str | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """Executa requisição HTTP DELETE para remoção de recurso."""
@@ -190,15 +224,18 @@ class DistributedHttpClient:
             criticality=criticality,
             headers=headers,
             params=params,
+            target_audience=target_audience,
             **kwargs,
         )
 
     async def get_catalog(self, url: str, **kwargs: Any) -> httpx.Response:
         """Atalho semântico para chamadas ao catálogo."""
+        kwargs.setdefault("target_audience", "catalog-service")
         return await self.get(url, criticality=Criticality.CATALOG, **kwargs)
 
     async def authorize_payment(self, url: str, **kwargs: Any) -> httpx.Response:
         """Atalho semântico para autorizações de pagamento."""
+        kwargs.setdefault("target_audience", "payment-service")
         return await self.post(url, criticality=Criticality.PAYMENT, **kwargs)
 
     async def aclose(self) -> None:
