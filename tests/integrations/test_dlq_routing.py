@@ -145,7 +145,7 @@ def test_rabbitmq_roteia_nack_para_dlq(rabbitmq_channel):
     # 4. Verifica se o RabbitMQ encaminhou para a DLQ (aguardando o roteamento assíncrono)
     dlq_method_frame = None
     dlq_body = None
-    
+
     limite = time.time() + 5.0  # Aguarda no máximo 5 segundos
     while time.time() < limite:
         dlq_method_frame, _, dlq_body = rabbitmq_channel.basic_get(
