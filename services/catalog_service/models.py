@@ -36,4 +36,6 @@ class ReserveStockResponse(BaseModel):
     product_id: str
     reserved_quantity: int
     remaining_stock: int
+    unit_price: float = Field(default=0.0, ge=0.0, description="Preço unitário do item reservado")
+    product_name: str | None = Field(default=None, description="Nome do produto")
     status: str = "reserved"

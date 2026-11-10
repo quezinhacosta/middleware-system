@@ -157,12 +157,21 @@ def reserve_product_stock(
 ) -> ReserveStockResponse:
     """Reserva temporária de quantidade com validação atômica de concorrência."""
     quantity = payload.quantity if payload is not None else 1
+    product = repository.get_by_id(product_id)
+    if product is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Produto {product_id} não encontrado",
+        )
+
     try:
         reserved_qty, remaining = repository.reserve_stock(product_id, quantity)
         return ReserveStockResponse(
             product_id=str(product_id),
             reserved_quantity=reserved_qty,
             remaining_stock=remaining,
+            unit_price=product.price,
+            product_name=product.name,
             status="reserved",
         )
     except ProductNotFoundError as exc:

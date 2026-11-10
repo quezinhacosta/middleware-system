@@ -353,25 +353,24 @@ async def create_order(
     # 1. Validação com o Catalog Service via middleware síncrono (reserva de estoque)
     total_amount = 0.0
     for item in items:
-        # Tenta obter detalhes do produto para calcular o preço
+        # Reserva o item no catálogo e obtém os dados do produto diretamente na resposta
         try:
-            prod_int_id = int(item.product_id) if item.product_id.isdigit() else 1
-            prod_details = await fetch_product_details(prod_int_id)
-            item.unit_price = float(prod_details.get("price", 100.0))
-        except Exception:
-            item.unit_price = 100.0
-
-        total_amount += item.unit_price * item.quantity
-
-        # Reserva o item no catálogo (lança 404 se não existir ou 409 se saldo insuficiente)
-        try:
-            await reserve_catalog_stock(item.product_id, item.quantity)
+            reservation = await reserve_catalog_stock(item.product_id, item.quantity)
+            item.unit_price = float(reservation.get("unit_price") or 100.0)
         except HTTPException:
             raise
         except Exception as exc:
             logger.warning(
                 "Falha ao contatar catalog-service diretamente para reserva: %s", exc
             )
+            # Em modo fallback, consulta cache ou usa valor padrão
+            try:
+                prod_details = await fetch_product_details(item.product_id)
+                item.unit_price = float(prod_details.get("price", 100.0))
+            except Exception:
+                item.unit_price = 100.0
+
+        total_amount += item.unit_price * item.quantity
 
     # 2. Ao ser aceito, o pedido recebe status PENDING e ID UUID v4
     order_id = str(uuid.uuid4())
