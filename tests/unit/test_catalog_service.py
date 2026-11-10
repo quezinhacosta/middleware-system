@@ -38,6 +38,7 @@ def client():
 def test_list_products_com_paginacao_e_filtros(client):
     response = client.get("/products?limit=2")
     assert response.status_code == 200
+    assert response.headers.get("X-Total-Count") == "3"
     data = response.json()
     assert len(data) == 2
     assert data[0]["id"] == "1"
@@ -45,12 +46,14 @@ def test_list_products_com_paginacao_e_filtros(client):
     # Filtro por nome
     res_name = client.get("/products?name=notebook")
     assert res_name.status_code == 200
+    assert res_name.headers.get("X-Total-Count") == "1"
     assert len(res_name.json()) == 1
     assert res_name.json()[0]["name"] == "Notebook Pro 16"
 
     # Filtro por preco
     res_price = client.get("/products?min_price=2000&max_price=3000")
     assert res_price.status_code == 200
+    assert res_price.headers.get("X-Total-Count") == "1"
     assert len(res_price.json()) == 1
     assert res_price.json()[0]["id"] == "2"
 
