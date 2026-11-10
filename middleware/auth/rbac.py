@@ -36,15 +36,24 @@ def get_current_user(
             detail="Token de usuário ausente",
         )
 
-    # MOCK: Lê as roles da string do token para testes sem precisar assinar JWTs reais.
+    # MOCK: Lê as claims 'sub' e 'roles' da string do token para testes sem precisar assinar JWTs reais.
     # Em um ambiente real, aqui haveria a decodificação e validação do JWT do usuário.
     token_str = token.credentials
-    roles = []
-    if "role=" in token_str:
-        roles_str = token_str.split("role=")[1].split(";")[0]
-        roles = roles_str.split(",")
+    roles: list[str] = []
+    user_id = "mock-user-123"
 
-    return UserIdentity(user_id="mock-user-123", roles=roles)
+    for part in token_str.replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if part.startswith("role="):
+            roles.append(part.split("=", 1)[1].strip())
+        elif part.startswith("sub="):
+            user_id = part.split("=", 1)[1].strip()
+        elif "=" not in part:
+            roles.append(part)
+
+    return UserIdentity(user_id=user_id, roles=roles)
 
 
 def require_roles(required_roles: list[str]) -> Callable[..., UserIdentity]:
