@@ -133,7 +133,12 @@ class DistributedHttpClient:
     ) -> httpx.Response:
         """Executa requisição HTTP GET com injeção de contexto e validação."""
         return await self.request(
-            "GET", url, criticality=criticality, headers=headers, params=params, **kwargs
+            "GET",
+            url,
+            criticality=criticality,
+            headers=headers,
+            params=params,
+            **kwargs,
         )
 
     async def post(

@@ -63,12 +63,14 @@ async def test_metodos_semanticos_get_post_put_delete():
 
     def handler(request):
         body = request.read().decode("utf-8")
-        historico.append({
-            "method": request.method,
-            "url": str(request.url),
-            "headers": dict(request.headers),
-            "body": body,
-        })
+        historico.append(
+            {
+                "method": request.method,
+                "url": str(request.url),
+                "headers": dict(request.headers),
+                "body": body,
+            }
+        )
         return httpx.Response(200, json={"success": True})
 
     async with fazer_cliente(handler) as cliente:

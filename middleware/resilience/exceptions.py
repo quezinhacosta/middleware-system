@@ -36,4 +36,3 @@ class ServiceUnavailableException(ConnectionError):
     ) -> None:
         self.url = url
         super().__init__(message)
-
