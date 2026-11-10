@@ -186,6 +186,31 @@ def reserve_product_stock(
         ) from exc
 
 
+@app.post(
+    "/products/{product_id}/release",
+    status_code=status.HTTP_200_OK,
+)
+def release_product_stock(
+    product_id: str,
+    payload: ReserveStockRequest | None = None,
+) -> dict[str, Any]:
+    """Estorno/Compensação (SAGA) de estoque previamente reservado."""
+    quantity = payload.quantity if payload is not None else 1
+    try:
+        new_stock = repository.release_stock(product_id, quantity)
+        return {
+            "product_id": str(product_id),
+            "released_quantity": quantity,
+            "remaining_stock": new_stock,
+            "status": "released",
+        }
+    except ProductNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
 @app.post("/products", status_code=status.HTTP_201_CREATED)
 def create_product(
     product: ProductCreate,

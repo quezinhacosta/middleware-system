@@ -136,6 +136,17 @@ class ProductRepository:
             remaining = product.stock_quantity
             return quantity, remaining
 
+    def release_stock(self, product_id: str, quantity: int) -> int:
+        """Estorna (compensa) estoque previamente reservado. Retorna novo saldo."""
+        pid = str(product_id)
+        with self._lock:
+            product = self._storage.get(pid)
+            if product is None:
+                raise ProductNotFoundError(f"Produto {pid} não encontrado")
+
+            product.stock_quantity += quantity
+            return product.stock_quantity
+
     def get_raw_dict(self) -> dict[str, dict[str, Any]]:
         """Retorna representação em dicionário para compatibilidade com rotas legadas."""
         with self._lock:
