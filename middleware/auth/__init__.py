@@ -1,4 +1,9 @@
-from middleware.auth.context import auth_token_var, get_auth_token, set_auth_token
+from middleware.auth.context import (
+    AuthContextMiddleware,
+    auth_token_var,
+    get_auth_token,
+    set_auth_token,
+)
 from middleware.auth.rbac import UserIdentity, get_current_user, require_roles
 from middleware.auth.service_auth import (
     ServiceAuthenticator,
@@ -19,6 +24,7 @@ __all__ = [
     "ServiceTokenProvider",
     "get_authenticator",
     "require_internal_service",
+    "AuthContextMiddleware",
     "auth_token_var",
     "get_auth_token",
     "set_auth_token",

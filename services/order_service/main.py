@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import ValidationError
 
 from middleware import DistributedHttpClient
+from middleware.auth.context import AuthContextMiddleware
 from middleware.auth.rbac import UserIdentity, require_roles
 from middleware.config import Settings, get_settings
 from middleware.observability.correlation import CorrelationIdMiddleware
@@ -107,6 +108,7 @@ app = FastAPI(
     version="0.1.0",
 )
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(AuthContextMiddleware)
 
 app.include_router(health_router)
 register_timeout_handler(app)
