@@ -348,7 +348,9 @@ async def test_injecao_automatica_de_token_s2s_com_service_token_provider():
     assert SERVICE_KEY_HEADER.lower() in capturado["headers"]
     token_s2s = capturado["headers"][SERVICE_KEY_HEADER.lower()]
     identity = authenticator.validate_token(
-        token_s2s, expected_audience="catalog-service", allowed_callers={"order-service"}
+        token_s2s,
+        expected_audience="catalog-service",
+        allowed_callers={"order-service"},
     )
     assert identity.caller == "order-service"
 
@@ -364,13 +366,17 @@ async def test_auth_context_middleware_define_e_reseta_token_no_contexto():
         request = Request(scope, receive)
         # Durante o processamento da requisição, auth_token_var deve conter o token
         token_atual = auth_token_var.get()
-        response = JSONResponse({"token_no_contexto": token_atual, "path": request.url.path})
+        response = JSONResponse(
+            {"token_no_contexto": token_atual, "path": request.url.path}
+        )
         await response(scope, receive, send)
 
     middleware_app = AuthContextMiddleware(app)
 
     transport = httpx.ASGITransport(app=middleware_app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
         resp = await client.get(
             "/test", headers={"Authorization": "Bearer token-asgi-seguro-123"}
         )
