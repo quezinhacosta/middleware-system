@@ -114,7 +114,9 @@ def list_products(
     max_price: float | None = Query(None, ge=0.0, description="Preço máximo"),
 ) -> list[Product]:
     """Listagem de produtos com suporte a paginação, filtros e cabeçalho X-Total-Count."""
-    total = repository.count_products(name=name, min_price=min_price, max_price=max_price)
+    total = repository.count_products(
+        name=name, min_price=min_price, max_price=max_price
+    )
     response.headers["X-Total-Count"] = str(total)
     return repository.list_products(
         skip=skip,

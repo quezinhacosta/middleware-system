@@ -19,7 +19,9 @@ class ProductCreate(BaseModel):
 
     name: str = Field(min_length=1, description="Nome do produto")
     price: float = Field(gt=0.0, description="Preço unitário")
-    stock_quantity: int = Field(ge=0, default=0, description="Quantidade inicial em estoque")
+    stock_quantity: int = Field(
+        ge=0, default=0, description="Quantidade inicial em estoque"
+    )
 
 
 class ReserveStockRequest(BaseModel):

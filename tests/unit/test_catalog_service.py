@@ -16,8 +16,18 @@ def reset_repo():
     """Restaura o repositório para estado limpo antes de cada teste."""
     repository._storage.clear()
     seeds = {
-        "1": {"id": "1", "name": "Notebook Pro 16", "price": 7500.0, "stock_quantity": 10},
-        "2": {"id": "2", "name": "Monitor Ultrawide 34", "price": 2800.0, "stock_quantity": 5},
+        "1": {
+            "id": "1",
+            "name": "Notebook Pro 16",
+            "price": 7500.0,
+            "stock_quantity": 10,
+        },
+        "2": {
+            "id": "2",
+            "name": "Monitor Ultrawide 34",
+            "price": 2800.0,
+            "stock_quantity": 5,
+        },
         "3": {"id": "3", "name": "Mouse Sem Fio", "price": 150.0, "stock_quantity": 0},
     }
     for k, v in seeds.items():

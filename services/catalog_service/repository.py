@@ -27,7 +27,9 @@ class InsufficientStockError(Exception):
 class ProductRepository:
     """Repositório em memória thread-safe com bloqueio atômico para reservas."""
 
-    def __init__(self, initial_products: dict[str, dict[str, Any]] | None = None) -> None:
+    def __init__(
+        self, initial_products: dict[str, dict[str, Any]] | None = None
+    ) -> None:
         self._lock = threading.Lock()
         self._storage: dict[str, Product] = {}
 
@@ -95,14 +97,14 @@ class ProductRepository:
                 stock_quantity=product.stock_quantity,
             )
 
-    def create(self, product_in: ProductCreate, custom_id: str | None = None) -> Product:
+    def create(
+        self, product_in: ProductCreate, custom_id: str | None = None
+    ) -> Product:
         with self._lock:
             if custom_id:
                 new_id = str(custom_id)
             else:
-                numeric_keys = [
-                    int(k) for k in self._storage.keys() if k.isdigit()
-                ]
+                numeric_keys = [int(k) for k in self._storage.keys() if k.isdigit()]
                 new_id = str(max(numeric_keys, default=0) + 1)
 
             product = Product(
