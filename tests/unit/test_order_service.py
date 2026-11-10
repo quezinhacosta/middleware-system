@@ -176,3 +176,50 @@ def test_list_orders_do_usuario_autenticado(client: TestClient):
     )
     assert resp_admin.status_code == 200
     assert len(resp_admin.json()) == 3
+
+
+def test_post_order_compensacao_saga_em_falha_de_item_multiplo(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    from fastapi import HTTPException
+
+    released: list[tuple[str, int]] = []
+
+    async def mock_reserve(product_id: str, quantity: int) -> dict[str, Any]:
+        if product_id == "item_indisponivel":
+            raise HTTPException(status_code=409, detail="Estoque insuficiente")
+        return {
+            "status": "reserved",
+            "product_id": product_id,
+            "reserved_quantity": quantity,
+            "unit_price": 50.0,
+        }
+
+    async def mock_release(product_id: str, quantity: int) -> dict[str, Any] | None:
+        released.append((product_id, quantity))
+        return {"status": "released", "product_id": product_id}
+
+    import services.order_service.main as order_main
+
+    monkeypatch.setattr(order_main, "reserve_catalog_stock", mock_reserve)
+    monkeypatch.setattr(order_main, "release_catalog_stock", mock_release)
+
+    payload = {
+        "items": [
+            {"product_id": "item_1", "quantity": 2, "unit_price": 50.0},
+            {"product_id": "item_indisponivel", "quantity": 1, "unit_price": 100.0},
+        ],
+        "payment_method": "PIX",
+    }
+    response = client.post(
+        "/orders",
+        json=payload,
+        headers={"Authorization": "Bearer role=customer,sub=user_123"},
+    )
+
+    assert response.status_code == 409
+    # O item 1 foi reservado e compensado/estornado
+    assert ("item_1", 2) in released
+    # Nenhum pedido persistido
+    assert len(order_repository.list_all()) == 0
+

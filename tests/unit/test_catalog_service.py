@@ -136,3 +136,25 @@ def test_reserve_stock_concorrente_garante_atomicidade():
     assert success_count == 20
     assert failure_count == 30
     assert repo.get_by_id("item_race").stock_quantity == 0
+
+
+def test_release_stock_estorna_quantidade_retorna_200(client):
+    # Reserva 3 unidades do produto 1 (de 10 para 7)
+    client.post("/products/1/reserve", json={"quantity": 3})
+    assert repository.get_by_id("1").stock_quantity == 7
+
+    # Estorna/compensa 3 unidades
+    response = client.post("/products/1/release", json={"quantity": 3})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["product_id"] == "1"
+    assert data["released_quantity"] == 3
+    assert data["remaining_stock"] == 10
+    assert data["status"] == "released"
+    assert repository.get_by_id("1").stock_quantity == 10
+
+
+def test_release_stock_produto_inexistente_retorna_404(client):
+    response = client.post("/products/999/release", json={"quantity": 1})
+    assert response.status_code == 404
+
