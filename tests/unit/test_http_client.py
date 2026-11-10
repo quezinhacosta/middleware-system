@@ -3,7 +3,9 @@ import asyncio
 import httpx
 import pytest
 
+from middleware.auth.context import set_auth_token
 from middleware.http.distributed_http_client import DistributedHttpClient
+from middleware.observability.correlation import CORRELATION_HEADER, correlation_id_var
 from middleware.resilience.exceptions import MiddlewareTimeoutError
 
 
@@ -47,6 +49,110 @@ async def test_status_de_erro_nao_vira_excecao():
     async with fazer_cliente(lambda req: httpx.Response(500)) as cliente:
         r = await cliente.request("GET", "http://catalog/items")
     assert r.status_code == 500
+
+
+# ---------- métodos semânticos (get, post, put, delete) ----------
+
+
+async def test_metodos_semanticos_get_post_put_delete():
+    historico = []
+
+    def handler(request):
+        body = request.read().decode("utf-8")
+        historico.append({
+            "method": request.method,
+            "url": str(request.url),
+            "headers": dict(request.headers),
+            "body": body,
+        })
+        return httpx.Response(200, json={"success": True})
+
+    async with fazer_cliente(handler) as cliente:
+        r_get = await cliente.get("http://svc/items", params={"cat": "eletronicos"})
+        assert r_get.status_code == 200
+
+        r_post = await cliente.post("http://svc/items", json={"name": "Teclado"})
+        assert r_post.status_code == 200
+
+        r_put = await cliente.put("http://svc/items/1", json={"price": 150.0})
+        assert r_put.status_code == 200
+
+        r_del = await cliente.delete("http://svc/items/1")
+        assert r_del.status_code == 200
+
+    assert historico[0]["method"] == "GET"
+    assert "cat=eletronicos" in historico[0]["url"]
+
+    assert historico[1]["method"] == "POST"
+    assert '"name": "Teclado"' in historico[1]["body"]
+
+    assert historico[2]["method"] == "PUT"
+    assert '"price": 150.0' in historico[2]["body"]
+
+    assert historico[3]["method"] == "DELETE"
+
+
+# ---------- injeção automática de contexto e headers ----------
+
+
+async def test_injecao_automatica_de_correlation_id_do_contexto():
+    capturado = {}
+
+    def handler(request):
+        capturado["headers"] = dict(request.headers)
+        return httpx.Response(200)
+
+    token = correlation_id_var.set("req-corr-uuid-456")
+    try:
+        async with fazer_cliente(handler) as cliente:
+            await cliente.get("http://svc/check")
+    finally:
+        correlation_id_var.reset(token)
+
+    assert capturado["headers"].get(CORRELATION_HEADER.lower()) == "req-corr-uuid-456"
+
+
+async def test_injecao_automatica_de_authorization_token_do_contexto():
+    capturado = {}
+
+    def handler(request):
+        capturado["headers"] = dict(request.headers)
+        return httpx.Response(200)
+
+    set_auth_token("jwt-session-token-abc")
+    try:
+        async with fazer_cliente(handler) as cliente:
+            await cliente.post("http://svc/resource", json={"a": 1})
+    finally:
+        set_auth_token(None)
+
+    assert capturado["headers"].get("authorization") == "Bearer jwt-session-token-abc"
+
+
+async def test_headers_explicitos_tem_precedencia_sobre_contexto():
+    capturado = {}
+
+    def handler(request):
+        capturado["headers"] = dict(request.headers)
+        return httpx.Response(200)
+
+    token = correlation_id_var.set("cid-contexto")
+    set_auth_token("token-contexto")
+    try:
+        async with fazer_cliente(handler) as cliente:
+            await cliente.get(
+                "http://svc/check",
+                headers={
+                    "X-Correlation-ID": "cid-customizado",
+                    "Authorization": "Bearer token-customizado",
+                },
+            )
+    finally:
+        correlation_id_var.reset(token)
+        set_auth_token(None)
+
+    assert capturado["headers"].get(CORRELATION_HEADER.lower()) == "cid-customizado"
+    assert capturado["headers"].get("authorization") == "Bearer token-customizado"
 
 
 # ---------- timeout por criticidade ----------
