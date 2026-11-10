@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import httpx
 import pytest
@@ -99,10 +100,10 @@ async def test_metodos_semanticos_get_post_put_delete():
     assert "cat=eletronicos" in historico[0]["url"]
 
     assert historico[1]["method"] == "POST"
-    assert '"name": "Teclado"' in historico[1]["body"]
+    assert json.loads(historico[1]["body"]) == {"name": "Teclado"}
 
     assert historico[2]["method"] == "PUT"
-    assert '"price": 150.0' in historico[2]["body"]
+    assert json.loads(historico[2]["body"]) == {"price": 150.0}
 
     assert historico[3]["method"] == "DELETE"
 
@@ -331,7 +332,9 @@ async def test_put_com_json_e_data_simultaneos_levanta_value_error():
 
 
 async def test_injecao_automatica_de_token_s2s_com_service_token_provider():
-    authenticator = ServiceAuthenticator(secret="test-s2s-secret", ttl_seconds=60)
+    authenticator = ServiceAuthenticator(
+        secret="test-s2s-secret-super-seguro-com-mais-de-32-bytes", ttl_seconds=60
+    )
     provider = ServiceTokenProvider("order-service", authenticator)
     capturado = {}
 
