@@ -90,7 +90,7 @@ def get_recommendations() -> dict[str, Any]:
     products = repository.list_products(limit=10)
     items = [
         {
-            "id": int(p.id) if p.id.isdigit() else p.id,
+            "id": p.id,
             "name": p.name,
             "price": p.price,
             "in_stock": p.stock_quantity > 0,
