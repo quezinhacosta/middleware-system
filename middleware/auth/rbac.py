@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from middleware.auth.context import set_auth_token
+
 logger = logging.getLogger(__name__)
 
 # Simula extração de token de usuário (para fins do projeto, mockamos a decodificação)
@@ -39,6 +41,7 @@ def get_current_user(
     # MOCK: Lê as claims 'sub' e 'roles' da string do token para testes sem precisar assinar JWTs reais.
     # Em um ambiente real, aqui haveria a decodificação e validação do JWT do usuário.
     token_str = token.credentials
+    set_auth_token(token_str)
     roles: list[str] = []
     user_id = "mock-user-123"
 
