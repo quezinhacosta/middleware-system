@@ -10,9 +10,9 @@ import pika
 from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import ValidationError
 
+from middleware import DistributedHttpClient
 from middleware.auth.rbac import UserIdentity, require_roles
 from middleware.config import Settings, get_settings
-from middleware.http.distributed_http_client import DistributedHttpClient
 from middleware.observability.correlation import CorrelationIdMiddleware
 from middleware.observability.health import router as health_router
 from middleware.observability.logging import configure_logging
@@ -231,8 +231,7 @@ async def fetch_product_details(product_id: int | str) -> dict[str, Any]:
 async def reserve_catalog_stock(product_id: str, quantity: int) -> dict[str, Any]:
     """Chama o endpoint de reserva de estoque no Catalog Service via DistributedHttpClient."""
     async with DistributedHttpClient() as client:
-        resp = await client.request(
-            "POST",
+        resp = await client.post(
             f"{CATALOG_SERVICE_URL}/products/{product_id}/reserve",
             json={"quantity": quantity},
         )
@@ -257,8 +256,7 @@ async def release_catalog_stock(
     """Compensa/estorna reserva de estoque no Catalog Service via DistributedHttpClient (SAGA)."""
     try:
         async with DistributedHttpClient() as client:
-            resp = await client.request(
-                "POST",
+            resp = await client.post(
                 f"{CATALOG_SERVICE_URL}/products/{product_id}/release",
                 json={"quantity": quantity},
             )
