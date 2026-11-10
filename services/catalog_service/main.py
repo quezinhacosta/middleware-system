@@ -75,11 +75,6 @@ INITIAL_SEEDS: dict[str, dict[str, Any]] = {
 # Instância singleton do repositório em memória
 repository = ProductRepository(INITIAL_SEEDS)
 
-# Dicionário mantido para compatibilidade retroativa
-CATALOG_PRODUCTS: dict[int, dict[str, Any]] = {
-    int(k): {**v, "in_stock": v["stock_quantity"] > 0} for k, v in INITIAL_SEEDS.items()
-}
-
 
 @app.get("/")
 def read_root() -> dict[str, str]:
@@ -184,15 +179,6 @@ def create_product(
 ) -> dict[str, Any]:
     """Criação de novos produtos protegida por RBAC (papel admin)."""
     created = repository.create(product)
-    # Sincroniza dicionário legado
-    if created.id.isdigit():
-        CATALOG_PRODUCTS[int(created.id)] = {
-            "id": int(created.id),
-            "name": created.name,
-            "price": created.price,
-            "in_stock": created.stock_quantity > 0,
-            "stock_quantity": created.stock_quantity,
-        }
     return {
         "message": f"Produto cadastrado por {user.user_id}",
         "product_id": int(created.id) if created.id.isdigit() else created.id,
