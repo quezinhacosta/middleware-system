@@ -3,7 +3,7 @@ import os
 import sys
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from pydantic import ValidationError
 
 from middleware.auth.rbac import UserIdentity, require_roles
@@ -106,13 +106,16 @@ def get_recommendations() -> dict[str, Any]:
 
 @app.get("/products", response_model=list[Product])
 def list_products(
+    response: Response,
     skip: int = Query(0, ge=0, description="Itens para pular (paginação)"),
     limit: int = Query(20, ge=1, le=100, description="Limite por página"),
     name: str | None = Query(None, description="Filtro por nome do produto"),
     min_price: float | None = Query(None, ge=0.0, description="Preço mínimo"),
     max_price: float | None = Query(None, ge=0.0, description="Preço máximo"),
 ) -> list[Product]:
-    """Listagem de produtos com suporte a paginação e filtros."""
+    """Listagem de produtos com suporte a paginação, filtros e cabeçalho X-Total-Count."""
+    total = repository.count_products(name=name, min_price=min_price, max_price=max_price)
+    response.headers["X-Total-Count"] = str(total)
     return repository.list_products(
         skip=skip,
         limit=limit,

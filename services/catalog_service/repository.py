@@ -62,6 +62,27 @@ class ProductRepository:
 
         return items[skip : skip + limit]
 
+    def count_products(
+        self,
+        *,
+        name: str | None = None,
+        min_price: float | None = None,
+        max_price: float | None = None,
+    ) -> int:
+        """Retorna o total de produtos correspondentes aos filtros (para paginação)."""
+        with self._lock:
+            items = list(self._storage.values())
+
+        if name:
+            name_lower = name.lower()
+            items = [p for p in items if name_lower in p.name.lower()]
+        if min_price is not None:
+            items = [p for p in items if p.price >= min_price]
+        if max_price is not None:
+            items = [p for p in items if p.price <= max_price]
+
+        return len(items)
+
     def get_by_id(self, product_id: str) -> Product | None:
         with self._lock:
             product = self._storage.get(str(product_id))
