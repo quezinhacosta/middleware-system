@@ -378,7 +378,11 @@ async def create_order(
         items = [OrderItem(product_id=pid, quantity=order_in.quantity, unit_price=0.0)]
 
     # 1. Validação com o Catalog Service via middleware síncrono (reserva de estoque)
+    # Decisão de Arquitetura (IMP-01): Se o catálogo responde com erro de negócio (404 inexistente
+    # ou 409 sem estoque), o pedido é abortado. Em caso de partição de rede/indisponibilidade
+    # transitória, adota-se disponibilidade (AP) com modo degradado via cache local de contingência.
     total_amount = 0.0
+    catalog_degraded = False
     reserved_items: list[tuple[str, int]] = []
     try:
         for item in items:
@@ -393,7 +397,8 @@ async def create_order(
                 logger.warning(
                     "Falha ao contatar catalog-service diretamente para reserva: %s", exc
                 )
-                # Em modo fallback, consulta cache ou usa valor padrão
+                catalog_degraded = True
+                # Em modo fallback degradado, consulta cache local ou usa valor padrão
                 try:
                     prod_details = await fetch_product_details(item.product_id)
                     item.unit_price = float(prod_details.get("price", 100.0))
@@ -435,7 +440,7 @@ async def create_order(
     }
 
     payment_info = await request_payment_processing(envelope)
-    degraded = bool(payment_info.get("degraded"))
+    degraded = bool(payment_info.get("degraded")) or catalog_degraded
 
     return {
         "order_id": order_id,

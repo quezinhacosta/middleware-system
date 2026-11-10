@@ -223,3 +223,31 @@ def test_post_order_compensacao_saga_em_falha_de_item_multiplo(
     # Nenhum pedido persistido
     assert len(order_repository.list_all()) == 0
 
+
+def test_post_order_modo_degradado_quando_catalogo_indisponivel(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    import services.order_service.main as order_main
+
+    async def mock_reserve_connection_error(product_id: str, quantity: int) -> dict[str, Any]:
+        raise ConnectionError("Catalogo offline")
+
+    monkeypatch.setattr(order_main, "reserve_catalog_stock", mock_reserve_connection_error)
+    monkeypatch.setattr(order_main, "_enqueue_payment_for_background", lambda env: True)
+
+    payload = {
+        "items": [{"product_id": "1", "quantity": 1}],
+        "payment_method": "CREDIT_CARD",
+    }
+    response = client.post(
+        "/orders",
+        json=payload,
+        headers={"Authorization": "Bearer role=customer,sub=user_123"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "PENDING"
+    assert data["degraded"] is True
+
+
