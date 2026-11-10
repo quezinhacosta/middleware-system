@@ -1,5 +1,23 @@
 # Override usado só pelos testes de integração: isola os volumes para que
 # `docker compose down -v` do teste não apague dados de desenvolvimento.
+
+services:
+  catalog-service:
+    environment:
+      - RABBITMQ_HOST=message-broker
+  order-service:
+    environment:
+      - RABBITMQ_HOST=message-broker
+  payment-service:
+    environment:
+      - RABBITMQ_HOST=message-broker
+  notification-service:
+    environment:
+      - RABBITMQ_HOST=message-broker
+    # Impede que o notification-service consuma as filas payment.approved/rejected
+    # durante o teste E2E de idempotência, permitindo que o teste verifique o tamanho da fila.
+    command: ["python", "-c", "import time; time.sleep(3600)"]
+
 volumes:
   rabbitmq_data:
     name: rabbitmq_data_test
