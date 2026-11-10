@@ -219,9 +219,7 @@ async def fetch_product_details(product_id: int | str) -> dict[str, Any]:
 
     async def _call() -> dict[str, Any]:
         async with DistributedHttpClient() as client:
-            resp = await client.get_catalog(
-                f"{CATALOG_SERVICE_URL}/products/{pid_str}"
-            )
+            resp = await client.get_catalog(f"{CATALOG_SERVICE_URL}/products/{pid_str}")
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()
             LOCAL_PRODUCT_CACHE[pid_str] = data
@@ -253,7 +251,9 @@ async def reserve_catalog_stock(product_id: str, quantity: int) -> dict[str, Any
         return data
 
 
-async def release_catalog_stock(product_id: str, quantity: int) -> dict[str, Any] | None:
+async def release_catalog_stock(
+    product_id: str, quantity: int
+) -> dict[str, Any] | None:
     """Compensa/estorna reserva de estoque no Catalog Service via DistributedHttpClient (SAGA)."""
     try:
         async with DistributedHttpClient() as client:
@@ -388,14 +388,17 @@ async def create_order(
         for item in items:
             # Reserva o item no catálogo e obtém os dados do produto diretamente na resposta
             try:
-                reservation = await reserve_catalog_stock(item.product_id, item.quantity)
+                reservation = await reserve_catalog_stock(
+                    item.product_id, item.quantity
+                )
                 item.unit_price = float(reservation.get("unit_price") or 100.0)
                 reserved_items.append((item.product_id, item.quantity))
             except HTTPException:
                 raise
             except Exception as exc:
                 logger.warning(
-                    "Falha ao contatar catalog-service diretamente para reserva: %s", exc
+                    "Falha ao contatar catalog-service diretamente para reserva: %s",
+                    exc,
                 )
                 catalog_degraded = True
                 # Em modo fallback degradado, consulta cache local ou usa valor padrão
@@ -427,7 +430,9 @@ async def create_order(
     )
     # Persiste no repositório thread-safe
     order_repository.save(new_order)
-    logger.info("Pedido %s criado com status PENDING para usuário %s", order_id, user.user_id)
+    logger.info(
+        "Pedido %s criado com status PENDING para usuário %s", order_id, user.user_id
+    )
 
     # 3. Dispara evento de pagamento (assíncrono no broker com fallback)
     envelope: dict[str, Any] = {

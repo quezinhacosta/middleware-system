@@ -157,4 +157,3 @@ def test_release_stock_estorna_quantidade_retorna_200(client):
 def test_release_stock_produto_inexistente_retorna_404(client):
     response = client.post("/products/999/release", json={"quantity": 1})
     assert response.status_code == 404
-

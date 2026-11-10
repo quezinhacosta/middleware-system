@@ -25,10 +25,19 @@ def test_post_order_cria_pedido_com_uuid_v4_e_status_pending(
 ):
     # Mock do catálogo e do broker de pagamento
     async def mock_reserve(product_id: str, quantity: int) -> dict[str, Any]:
-        return {"status": "reserved", "product_id": product_id, "reserved_quantity": quantity}
+        return {
+            "status": "reserved",
+            "product_id": product_id,
+            "reserved_quantity": quantity,
+        }
 
     async def mock_details(product_id: int) -> dict[str, Any]:
-        return {"id": product_id, "name": "Notebook Pro", "price": 5000.0, "stock_quantity": 10}
+        return {
+            "id": product_id,
+            "name": "Notebook Pro",
+            "price": 5000.0,
+            "stock_quantity": 10,
+        }
 
     import services.order_service.main as order_main
 
@@ -229,10 +238,14 @@ def test_post_order_modo_degradado_quando_catalogo_indisponivel(
 ):
     import services.order_service.main as order_main
 
-    async def mock_reserve_connection_error(product_id: str, quantity: int) -> dict[str, Any]:
+    async def mock_reserve_connection_error(
+        product_id: str, quantity: int
+    ) -> dict[str, Any]:
         raise ConnectionError("Catalogo offline")
 
-    monkeypatch.setattr(order_main, "reserve_catalog_stock", mock_reserve_connection_error)
+    monkeypatch.setattr(
+        order_main, "reserve_catalog_stock", mock_reserve_connection_error
+    )
     monkeypatch.setattr(order_main, "_enqueue_payment_for_background", lambda env: True)
 
     payload = {
@@ -249,5 +262,3 @@ def test_post_order_modo_degradado_quando_catalogo_indisponivel(
     data = response.json()
     assert data["status"] == "PENDING"
     assert data["degraded"] is True
-
-
