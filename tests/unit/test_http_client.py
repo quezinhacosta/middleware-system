@@ -6,7 +6,11 @@ import pytest
 from middleware.auth.context import set_auth_token
 from middleware.http.distributed_http_client import DistributedHttpClient
 from middleware.observability.correlation import CORRELATION_HEADER, correlation_id_var
-from middleware.resilience.exceptions import MiddlewareTimeoutError
+from middleware.resilience.exceptions import (
+    GatewayTimeoutException,
+    MiddlewareTimeoutError,
+    ServiceUnavailableException,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -242,16 +246,42 @@ async def test_timeout_de_fase_sanitiza_url():
     assert exc.value.url == "http://catalog/x"
 
 
-# ---------- outros erros e ciclo de vida ----------
+# ---------- mapeamento de exceções padronizadas de transporte ----------
 
 
-async def test_erro_de_conexao_nao_e_convertido():
+async def test_erro_de_conexao_recusada_vira_service_unavailable():
     def handler(request):
         raise httpx.ConnectError("recusada", request=request)
 
     async with fazer_cliente(handler) as cliente:
-        with pytest.raises(httpx.ConnectError):
+        with pytest.raises(ServiceUnavailableException) as exc:
             await cliente.request("GET", "http://catalog/x")
+        assert "catalog/x" in str(exc.value)
+        assert isinstance(exc.value, ConnectionError)
+
+
+async def test_timeout_de_conexao_vira_gateway_timeout():
+    def handler(request):
+        raise httpx.ConnectTimeout("timeout de conexao", request=request)
+
+    async with fazer_cliente(handler) as cliente:
+        with pytest.raises(GatewayTimeoutException) as exc:
+            await cliente.get("http://payment/pay")
+        assert exc.value.url == "http://payment/pay"
+        assert isinstance(exc.value, MiddlewareTimeoutError)
+
+
+async def test_erro_de_socket_network_vira_service_unavailable():
+    def handler(request):
+        raise httpx.NetworkError("falha de rota", request=request)
+
+    async with fazer_cliente(handler) as cliente:
+        with pytest.raises(ServiceUnavailableException) as exc:
+            await cliente.post("http://catalog/item", json={"x": 1})
+        assert isinstance(exc.value, ConnectionError)
+
+
+# ---------- ciclo de vida do cliente ----------
 
 
 async def test_context_manager_fecha_o_client():
