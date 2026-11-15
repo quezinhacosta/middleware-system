@@ -6,9 +6,10 @@ import json
 import logging
 import os
 import time
+from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from typing import Any, Awaitable, Callable, TypeVar
+from typing import Any, TypeVar
 from urllib.parse import urlsplit
 
 from .exceptions import MiddlewareTimeoutError
@@ -55,28 +56,35 @@ def _extract_url(args: tuple, kwargs: dict) -> str | None:
 
 def _timeout_error(*, url, limit, start, operation) -> MiddlewareTimeoutError:
     elapsed = time.perf_counter() - start
-    logger.error(json.dumps({
-        "event": "middleware_timeout",
-        "status": 504,
-        "url": _sanitize_url(url),
-        "operation": operation,
-        "timeout_s": limit,
-        "duration_ms": round(elapsed * 1000, 1),
-    }))
+    logger.error(
+        json.dumps(
+            {
+                "event": "middleware_timeout",
+                "status": 504,
+                "url": _sanitize_url(url),
+                "operation": operation,
+                "timeout_s": limit,
+                "duration_ms": round(elapsed * 1000, 1),
+            }
+        )
+    )
     return MiddlewareTimeoutError(
         url=_sanitize_url(url), timeout=limit, elapsed=elapsed, operation=operation
     )
 
 
 async def run_with_deadline(
-    coro: Awaitable[T], seconds: float, *,
-    url: str | None = None, operation: str | None = None,
+    coro: Awaitable[T],
+    seconds: float,
+    *,
+    url: str | None = None,
+    operation: str | None = None,
 ) -> T:
     """Executa a corrotina com prazo total; ao estourar, ela é cancelada."""
     start = time.perf_counter()
     try:
         return await asyncio.wait_for(coro, timeout=seconds)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise _timeout_error(
             url=url, limit=seconds, start=start, operation=operation
         ) from None
@@ -89,17 +97,22 @@ def with_timeout(seconds: float | Criticality) -> Callable:
         @with_timeout(1.5)
         @with_timeout(Criticality.PAYMENT)   # lê TIMEOUT_PAYMENT_SECONDS
     """
+
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         operation = func.__qualname__
 
         if inspect.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 limit = _resolve_seconds(seconds)
                 return await run_with_deadline(
-                    func(*args, **kwargs), limit,
-                    url=_extract_url(args, kwargs), operation=operation,
+                    func(*args, **kwargs),
+                    limit,
+                    url=_extract_url(args, kwargs),
+                    operation=operation,
                 )
+
             return async_wrapper
 
         @functools.wraps(func)
@@ -115,9 +128,12 @@ def with_timeout(seconds: float | Criticality) -> Callable:
                     raise
                 future.cancel()
                 raise _timeout_error(
-                    url=_extract_url(args, kwargs), limit=limit,
-                    start=start, operation=operation,
+                    url=_extract_url(args, kwargs),
+                    limit=limit,
+                    start=start,
+                    operation=operation,
                 ) from None
+
         return sync_wrapper
 
     return decorator

@@ -1,10 +1,12 @@
 import os
 import threading
-import uvicorn
 from contextlib import asynccontextmanager
+
+import uvicorn
 from fastapi import FastAPI
-from middleware.observability.health import router as health_router
 from src.consumer import start_consuming
+
+from middleware.observability.health import router as health_router
 
 
 @asynccontextmanager

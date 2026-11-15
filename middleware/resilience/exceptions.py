@@ -1,8 +1,14 @@
 class MiddlewareTimeoutError(Exception):
     """Lançada quando uma operação excede o limite de tempo."""
 
-    def __init__(self, *, url: str | None = None, timeout: float,
-                 elapsed: float, operation: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        url: str | None = None,
+        timeout: float,
+        elapsed: float,
+        operation: str | None = None,
+    ) -> None:
         self.url = url
         self.timeout = timeout
         self.elapsed = elapsed
@@ -11,3 +17,39 @@ class MiddlewareTimeoutError(Exception):
         super().__init__(
             f"Timeout de {timeout:.2f}s excedido após {elapsed:.2f}s em {target}"
         )
+
+
+class GatewayTimeoutException(MiddlewareTimeoutError):
+    """Lançada quando uma chamada HTTP excede o tempo limite esperado (504 Gateway Timeout)."""
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        url: str | None = None,
+        timeout: float = 0.0,
+        elapsed: float = 0.0,
+        operation: str | None = None,
+    ) -> None:
+        self.message = message
+        super().__init__(
+            url=url,
+            timeout=timeout,
+            elapsed=elapsed,
+            operation=operation,
+        )
+        if message:
+            self.args = (message,)
+
+
+class ServiceUnavailableException(ConnectionError):
+    """Lançada quando o serviço de destino está indisponível ou inacessível via socket (503 Service Unavailable)."""
+
+    def __init__(
+        self,
+        message: str = "Serviço indisponível",
+        *,
+        url: str | None = None,
+    ) -> None:
+        self.url = url
+        super().__init__(message)

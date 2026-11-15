@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .exceptions import MiddlewareTimeoutError
+from .exceptions import MiddlewareTimeoutError, ServiceUnavailableException
 
 
 def register_timeout_handler(app: FastAPI) -> None:
@@ -16,3 +16,23 @@ def register_timeout_handler(app: FastAPI) -> None:
                 "timeout_seconds": exc.timeout,
             },
         )
+
+
+def register_service_unavailable_handler(app: FastAPI) -> None:
+    @app.exception_handler(ServiceUnavailableException)
+    async def _service_unavailable_handler(
+        request: Request, exc: ServiceUnavailableException
+    ):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": "service_unavailable",
+                "detail": "Serviço dependente indisponível ou inacessível.",
+            },
+        )
+
+
+def register_resilience_handlers(app: FastAPI) -> None:
+    """Registra handlers de resiliência (503 Service Unavailable e 504 Gateway Timeout)."""
+    register_timeout_handler(app)
+    register_service_unavailable_handler(app)

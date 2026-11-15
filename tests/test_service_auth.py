@@ -25,7 +25,9 @@ def client():
 
     @app.post(
         "/products/{product_id}/reserve",
-        dependencies=[Depends(sa.require_internal_service("catalog-service", {"order-service"}))],
+        dependencies=[
+            Depends(sa.require_internal_service("catalog-service", {"order-service"}))
+        ],
     )
     def reserve(product_id: int):
         return {"reserved": product_id}
@@ -33,9 +35,17 @@ def client():
     return TestClient(app)
 
 
-def _token(issuer="order-service", audience="catalog-service", secret=SECRET, exp_delta=60):
+def _token(
+    issuer="order-service", audience="catalog-service", secret=SECRET, exp_delta=60
+):
     now = int(time.time())
-    claims = {"iss": issuer, "aud": audience, "iat": now, "exp": now + exp_delta, "jti": "t1"}
+    claims = {
+        "iss": issuer,
+        "aud": audience,
+        "iat": now,
+        "exp": now + exp_delta,
+        "jti": "t1",
+    }
     return jwt.encode(claims, secret, algorithm="HS256")
 
 
@@ -46,7 +56,9 @@ def _post(client, token=None):
 
 def test_valid_token_is_accepted(client):
     provider = sa.ServiceTokenProvider("order-service", sa.get_authenticator())
-    resp = client.post("/products/1/reserve", headers=provider.auth_headers("catalog-service"))
+    resp = client.post(
+        "/products/1/reserve", headers=provider.auth_headers("catalog-service")
+    )
     assert resp.status_code == 200
 
 
@@ -67,7 +79,9 @@ def test_wrong_audience_returns_401(client):
 
 
 def test_alg_none_returns_401(client):
-    forged = jwt.encode({"iss": "order-service", "aud": "catalog-service"}, None, algorithm="none")
+    forged = jwt.encode(
+        {"iss": "order-service", "aud": "catalog-service"}, None, algorithm="none"
+    )
     assert _post(client, forged).status_code == 401
 
 
@@ -82,4 +96,6 @@ def test_weak_secret_fails_fast():
 
 def test_provider_caches_token_until_near_expiry():
     provider = sa.ServiceTokenProvider("order-service", sa.get_authenticator())
-    assert provider.get_token("catalog-service") == provider.get_token("catalog-service")
+    assert provider.get_token("catalog-service") == provider.get_token(
+        "catalog-service"
+    )

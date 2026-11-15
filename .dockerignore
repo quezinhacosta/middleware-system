@@ -31,5 +31,6 @@ htmlcov
 # Documentacao e Arquivos Auxiliares de Build
 docs
 *.md
+!README.md
 Makefile
 
