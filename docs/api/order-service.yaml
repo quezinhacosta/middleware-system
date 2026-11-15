@@ -1,0 +1,410 @@
+openapi: 3.0.3
+info:
+  title: Order Service
+  description: Microsserviço de gestão e checkout de pedidos do e-commerce
+  version: 0.1.0
+paths:
+  /health/live:
+    get:
+      tags:
+      - Healthcheck
+      summary: Liveness Probe
+      description: 'Liveness: Confirma apenas se a aplicação está viva.
+
+        Rota final: GET /health/live'
+      operationId: liveness_probe_health_live_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health/ready:
+    get:
+      tags:
+      - Healthcheck
+      summary: Readiness Probe
+      description: 'Readiness: Confirma se as dependências essenciais estão operacionais.
+
+        Rota final: GET /health/ready'
+      operationId: readiness_probe_health_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /auth/login:
+    post:
+      tags:
+      - Autenticação
+      summary: Login For Test Token
+      description: Endpoint utilitário/mock para emissão de tokens de teste para clientes
+        e admins.
+      operationId: login_for_test_token_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /:
+    get:
+      summary: Read Root
+      operationId: read_root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Read Root  Get
+  /catalog/recommendations:
+    get:
+      summary: Get Recommendations Endpoint
+      operationId: get_recommendations_endpoint_catalog_recommendations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Recommendations Endpoint Catalog Recommendations
+                  Get
+  /catalog/products/{product_id}:
+    get:
+      summary: Get Product Details Endpoint
+      operationId: get_product_details_endpoint_catalog_products__product_id__get
+      parameters:
+      - name: product_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Product Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Product Details Endpoint Catalog Products  Product
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /payments:
+    post:
+      summary: Create Payment Endpoint
+      operationId: create_payment_endpoint_payments_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Create Payment Endpoint Payments Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /orders:
+    get:
+      summary: List Orders
+      description: Lista os pedidos do usuário autenticado (ou todos se for admin).
+      operationId: list_orders_orders_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Order'
+                type: array
+                title: Response List Orders Orders Get
+      security:
+      - HTTPBearer: []
+    post:
+      summary: Create Order
+      description: Cria um novo pedido validando disponibilidade no catálogo e publicando
+        evento.
+      operationId: create_order_orders_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Create Order Orders Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /orders/{order_id}:
+    get:
+      summary: Get Order By Id
+      description: Consulta os detalhes e situação atual de um pedido específico.
+      operationId: get_order_by_id_orders__order_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LoginRequest:
+      properties:
+        username:
+          type: string
+          title: Username
+          description: Identificador do usuário (sub)
+          default: customer_user
+        roles:
+          items:
+            type: string
+          type: array
+          title: Roles
+          description: 'Lista de papéis do usuário (ex: [''customer''], [''admin''])'
+        expires_in_seconds:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Expires In Seconds
+          description: Tempo de validade customizado em segundos
+      type: object
+      title: LoginRequest
+    LoginResponse:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+        token_type:
+          type: string
+          title: Token Type
+          default: bearer
+        expires_in:
+          type: integer
+          title: Expires In
+        user_id:
+          type: string
+          title: User Id
+        roles:
+          items:
+            type: string
+          type: array
+          title: Roles
+      type: object
+      required:
+      - access_token
+      - expires_in
+      - user_id
+      - roles
+      title: LoginResponse
+    Order:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Identificador único do pedido (UUID v4)
+        customer_id:
+          type: string
+          title: Customer Id
+          description: Identificador do cliente solicitante
+        items:
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          type: array
+          minItems: 1
+          title: Items
+          description: Lista de itens do pedido
+        total_amount:
+          type: number
+          minimum: 0.0
+          title: Total Amount
+          description: Valor total acumulado do pedido
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+          description: Status atual do pedido
+          default: PENDING
+        payment_method:
+          type: string
+          title: Payment Method
+          description: Método de pagamento selecionado
+          default: PIX
+      type: object
+      required:
+      - id
+      - customer_id
+      - items
+      - total_amount
+      title: Order
+      description: Entidade do pedido.
+    OrderCreateRequest:
+      properties:
+        items:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/OrderItem'
+            type: array
+          - type: 'null'
+          title: Items
+          description: Lista de itens do pedido
+        product_id:
+          anyOf:
+          - type: integer
+          - type: string
+          - type: 'null'
+          title: Product Id
+          description: Atalho de produto único
+        quantity:
+          type: integer
+          minimum: 1.0
+          title: Quantity
+          description: Quantidade de produto
+          default: 1
+        payment_method:
+          type: string
+          title: Payment Method
+          description: Forma de pagamento
+          default: PIX
+      type: object
+      title: OrderCreateRequest
+      description: Payload para solicitação de criação de um novo pedido.
+    OrderItem:
+      properties:
+        product_id:
+          type: string
+          title: Product Id
+          description: Identificador único do produto no catálogo
+        quantity:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Quantity
+          description: Quantidade do produto
+        unit_price:
+          type: number
+          minimum: 0.0
+          title: Unit Price
+          description: Preço unitário do produto
+          default: 0.0
+      type: object
+      required:
+      - product_id
+      - quantity
+      title: OrderItem
+      description: Item pertencente a um pedido.
+    OrderStatus:
+      type: string
+      enum:
+      - PENDING
+      - RESERVED
+      - PAYMENT_PROCESSING
+      - CONFIRMED
+      - CANCELLED
+      title: OrderStatus
+      description: Estados do ciclo de vida de um pedido.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer
+servers:
+- url: http://localhost:8000
+  description: order-service
