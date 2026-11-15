@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import uuid
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
@@ -102,10 +103,31 @@ configure_logging(
     level=os.environ.get("LOG_LEVEL", "INFO"),
 )
 
+_http_client: DistributedHttpClient | None = None
+
+
+def get_http_client() -> DistributedHttpClient:
+    """Retorna cliente HTTP distribuído compartilhado (reutilizando pool de conexões)."""
+    global _http_client
+    if _http_client is None:
+        _http_client = DistributedHttpClient()
+    return _http_client
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
+
+
 app = FastAPI(
     title="Order Service",
     description="Microsserviço de gestão e checkout de pedidos do e-commerce",
     version="0.1.0",
+    lifespan=lifespan,
 )
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(AuthContextMiddleware)
@@ -203,11 +225,11 @@ def _payment_fallback(order_payload: dict[str, Any]) -> dict[str, Any]:
 @with_fallback(_recommendations_fallback)
 async def fetch_catalog_recommendations() -> dict[str, Any]:
     async def _call() -> dict[str, Any]:
-        async with DistributedHttpClient() as client:
-            resp = await client.get_catalog(f"{CATALOG_SERVICE_URL}/recommendations")
-            resp.raise_for_status()
-            data: dict[str, Any] = resp.json()
-            return {**data, "degraded": False}
+        client = get_http_client()
+        resp = await client.get_catalog(f"{CATALOG_SERVICE_URL}/recommendations")
+        resp.raise_for_status()
+        data: dict[str, Any] = resp.json()
+        return {**data, "degraded": False}
 
     res: dict[str, Any] = await retry_policy.call_async(
         catalog_breaker.call_async, _call
@@ -220,36 +242,36 @@ async def fetch_product_details(product_id: int | str) -> dict[str, Any]:
     pid_str = str(product_id)
 
     async def _call() -> dict[str, Any]:
-        async with DistributedHttpClient() as client:
-            resp = await client.get_catalog(f"{CATALOG_SERVICE_URL}/products/{pid_str}")
-            resp.raise_for_status()
-            data: dict[str, Any] = resp.json()
-            LOCAL_PRODUCT_CACHE[pid_str] = data
-            return {**data, "degraded": False, "source": "catalog-service"}
+        client = get_http_client()
+        resp = await client.get_catalog(f"{CATALOG_SERVICE_URL}/products/{pid_str}")
+        resp.raise_for_status()
+        data: dict[str, Any] = resp.json()
+        LOCAL_PRODUCT_CACHE[pid_str] = data
+        return {**data, "degraded": False, "source": "catalog-service"}
 
     return await retry_policy.call_async(catalog_breaker.call_async, _call)
 
 
 async def reserve_catalog_stock(product_id: str, quantity: int) -> dict[str, Any]:
     """Chama o endpoint de reserva de estoque no Catalog Service via DistributedHttpClient."""
-    async with DistributedHttpClient() as client:
-        resp = await client.post(
-            f"{CATALOG_SERVICE_URL}/products/{product_id}/reserve",
-            json={"quantity": quantity},
+    client = get_http_client()
+    resp = await client.post(
+        f"{CATALOG_SERVICE_URL}/products/{product_id}/reserve",
+        json={"quantity": quantity},
+    )
+    if resp.status_code == 404:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Produto {product_id} não encontrado no catálogo",
         )
-        if resp.status_code == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Produto {product_id} não encontrado no catálogo",
-            )
-        if resp.status_code == 409:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Estoque insuficiente no catálogo para o produto {product_id}",
-            )
-        resp.raise_for_status()
-        data: dict[str, Any] = resp.json()
-        return data
+    if resp.status_code == 409:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Estoque insuficiente no catálogo para o produto {product_id}",
+        )
+    resp.raise_for_status()
+    data: dict[str, Any] = resp.json()
+    return data
 
 
 async def release_catalog_stock(
@@ -257,20 +279,20 @@ async def release_catalog_stock(
 ) -> dict[str, Any] | None:
     """Compensa/estorna reserva de estoque no Catalog Service via DistributedHttpClient (SAGA)."""
     try:
-        async with DistributedHttpClient() as client:
-            resp = await client.post(
-                f"{CATALOG_SERVICE_URL}/products/{product_id}/release",
-                json={"quantity": quantity},
-            )
-            if resp.is_success:
-                data: dict[str, Any] = resp.json()
-                return data
-            logger.warning(
-                "Falha ao liberar estoque do produto %s (status %s): %s",
-                product_id,
-                resp.status_code,
-                resp.text,
-            )
+        client = get_http_client()
+        resp = await client.post(
+            f"{CATALOG_SERVICE_URL}/products/{product_id}/release",
+            json={"quantity": quantity},
+        )
+        if resp.is_success:
+            data: dict[str, Any] = resp.json()
+            return data
+        logger.warning(
+            "Falha ao liberar estoque do produto %s (status %s): %s",
+            product_id,
+            resp.status_code,
+            resp.text,
+        )
     except Exception as exc:
         logger.error(
             "Erro inesperado ao compensar estoque do produto %s: %s",
@@ -283,14 +305,14 @@ async def release_catalog_stock(
 @with_fallback(_payment_fallback)
 async def request_payment_processing(order_payload: dict[str, Any]) -> dict[str, Any]:
     async def _call() -> dict[str, Any]:
-        async with DistributedHttpClient() as client:
-            resp = await client.authorize_payment(
-                f"{PAYMENT_SERVICE_URL}/payments",
-                json=order_payload,
-            )
-            resp.raise_for_status()
-            data: dict[str, Any] = resp.json()
-            return {**data, "degraded": False}
+        client = get_http_client()
+        resp = await client.authorize_payment(
+            f"{PAYMENT_SERVICE_URL}/payments",
+            json=order_payload,
+        )
+        resp.raise_for_status()
+        data: dict[str, Any] = resp.json()
+        return {**data, "degraded": False}
 
     return await payment_breaker.call_async(_call)
 
