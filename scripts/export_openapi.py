@@ -13,10 +13,10 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 sys.path.insert(0, str(ROOT_DIR / "services" / "payment_service"))
 
-from services.catalog_service.main import app as catalog_app
-from services.notification_service.main import app as notification_app
-from services.order_service.main import app as order_app
-from services.payment_service.main import app as payment_app
+from services.catalog_service.main import app as catalog_app  # noqa: E402
+from services.notification_service.main import app as notification_app  # noqa: E402
+from services.order_service.main import app as order_app  # noqa: E402
+from services.payment_service.main import app as payment_app  # noqa: E402
 
 
 def export_specs() -> None:
