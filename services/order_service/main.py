@@ -20,7 +20,7 @@ from middleware.observability.logging import configure_logging
 from middleware.resilience.circuit_breaker import CircuitBreaker
 from middleware.resilience.exceptions import MiddlewareTimeoutError
 from middleware.resilience.fallback import with_fallback
-from middleware.resilience.handlers import register_timeout_handler
+from middleware.resilience.handlers import register_resilience_handlers
 from middleware.resilience.retry import RetryPolicy
 from middleware.transport.consumer import Topology, declare_topology
 from services.order_service.models import (
@@ -111,7 +111,7 @@ app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(AuthContextMiddleware)
 
 app.include_router(health_router)
-register_timeout_handler(app)
+register_resilience_handlers(app)
 
 
 # ---------- Handlers de Fallback ----------

@@ -315,6 +315,25 @@ async def test_erro_de_protocolo_remoto_vira_service_unavailable():
         assert isinstance(exc.value, ConnectionError)
 
 
+async def test_handler_service_unavailable_retorna_status_503():
+    from fastapi import FastAPI
+    from middleware.resilience.handlers import register_service_unavailable_handler
+
+    test_app = FastAPI()
+    register_service_unavailable_handler(test_app)
+
+    @test_app.get("/trigger-503")
+    async def trigger():
+        raise ServiceUnavailableException("Destino inalcançável")
+
+    transport = httpx.ASGITransport(app=test_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/trigger-503")
+        assert resp.status_code == 503
+        data = resp.json()
+        assert data["error"] == "service_unavailable"
+
+
 # ---------- ciclo de vida do cliente ----------
 
 
