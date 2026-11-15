@@ -43,6 +43,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         exempt_paths: Iterable[str] | None = None,
         exempt_routes: Iterable[tuple[str, str]] | None = None,
         protected_paths: Iterable[str] | None = None,
+        protected_routes: Iterable[tuple[str, str]] | None = None,
         allow_mock_tokens: bool = True,
     ) -> None:
         super().__init__(app)
@@ -50,11 +51,29 @@ class AuthMiddleware(BaseHTTPMiddleware):
         self.exempt_paths = set(exempt_paths or DEFAULT_PUBLIC_PATHS)
         self.exempt_routes = list(exempt_routes or [])
         self.protected_paths = set(protected_paths) if protected_paths else None
+        self.protected_routes = list(protected_routes) if protected_routes else None
         self.allow_mock_tokens = allow_mock_tokens
 
     def _is_exempt(self, method: str, path: str) -> bool:
         """Verifica se o endpoint atual é isento de autenticação obrigatória."""
-        # Se protected_paths estiver configurado, apenas rotas que começam com ele são protegidas
+        method_upper = method.upper()
+
+        # 1. Se protected_routes for configurado, apenas pares (método, rota) exatos/wildcard são protegidos
+        if self.protected_routes is not None:
+            matches_protected = False
+            for p_method, p_path in self.protected_routes:
+                if p_method.upper() in (method_upper, "*"):
+                    if p_path.endswith("*"):
+                        if path.startswith(p_path[:-1]):
+                            matches_protected = True
+                            break
+                    elif path == p_path:
+                        matches_protected = True
+                        break
+            if not matches_protected:
+                return True
+
+        # 2. Se protected_paths estiver configurado, apenas rotas que começam com ele são protegidas
         if self.protected_paths is not None:
             is_explicitly_protected = any(
                 path == p or path.startswith(f"{p}/") for p in self.protected_paths
@@ -62,13 +81,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if not is_explicitly_protected:
                 return True
 
-        # Verifica rotas isentas por caminho exato ou prefixo
+        # 3. Verifica rotas isentas por caminho exato ou prefixo
         for ex in self.exempt_paths:
             if path == ex or path.startswith(f"{ex}/"):
                 return True
 
-        # Verifica pares (método, caminho com suporte a wildcard *)
-        method_upper = method.upper()
+        # 4. Verifica pares (método, caminho com suporte a wildcard *)
         for ex_method, ex_path in self.exempt_routes:
             if ex_method.upper() in (method_upper, "*"):
                 if ex_path.endswith("*"):

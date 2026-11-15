@@ -132,18 +132,7 @@ app = FastAPI(
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(
     AuthMiddleware,
-    exempt_paths={
-        "/",
-        "/docs",
-        "/redoc",
-        "/openapi.json",
-        "/auth/login",
-        "/catalog/recommendations",
-    },
-    exempt_routes=[
-        ("*", "/health*"),
-        ("*", "/auth*"),
-    ],
+    protected_paths={"/orders"},
 )
 app.add_middleware(AuthContextMiddleware)
 

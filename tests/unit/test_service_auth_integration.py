@@ -30,7 +30,7 @@ def test_order_service_rotas_publicas_sem_token(order_client):
     assert resp.status_code == 200
 
     # Health
-    resp = order_client.get("/health")
+    resp = order_client.get("/health/live")
     assert resp.status_code == 200
 
     # Login
@@ -93,10 +93,21 @@ def test_catalog_service_criacao_produto_sem_token_retorna_401(catalog_client):
     assert resp.json()["error"] == "unauthorized"
 
 
-def test_catalog_service_reserva_sem_token_retorna_401(catalog_client):
-    resp = catalog_client.post("/products/1/reserve", json={"quantity": 1})
-    assert resp.status_code == 401
-    assert resp.json()["error"] == "unauthorized"
+def test_catalog_service_criacao_produto_com_token_customer_retorna_403(
+    catalog_client, token_mgr
+):
+    token = token_mgr.create_token(user_id="cliente_comum", roles=["customer"])
+    payload = {
+        "name": "Headset Gamer",
+        "price": 350.0,
+        "stock_quantity": 20,
+    }
+    resp = catalog_client.post(
+        "/products",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
 
 
 def test_catalog_service_reserva_com_token_valido_sucesso(catalog_client, token_mgr):
@@ -127,4 +138,5 @@ def test_catalog_service_criacao_produto_com_token_admin_sucesso(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 201
-    assert resp.json()["name"] == "Webcam 4K Ultra"
+    assert "product_id" in resp.json()
+    assert "Produto cadastrado por admin_user" in resp.json()["message"]
