@@ -125,8 +125,7 @@ class DistributedHttpClient:
                 operation=f"{method} DistributedHttpClient",
             ) from exc
         except (
-            httpx.ConnectError,
-            httpx.NetworkError,
+            httpx.TransportError,
             ConnectionError,
             OSError,
         ) as exc:

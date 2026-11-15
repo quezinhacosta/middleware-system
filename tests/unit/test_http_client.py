@@ -305,6 +305,16 @@ async def test_erro_de_socket_network_vira_service_unavailable():
         assert isinstance(exc.value, ConnectionError)
 
 
+async def test_erro_de_protocolo_remoto_vira_service_unavailable():
+    def handler(request):
+        raise httpx.RemoteProtocolError("peer closed connection", request=request)
+
+    async with fazer_cliente(handler) as cliente:
+        with pytest.raises(ServiceUnavailableException) as exc:
+            await cliente.get("http://catalog/item")
+        assert isinstance(exc.value, ConnectionError)
+
+
 # ---------- ciclo de vida do cliente ----------
 
 
