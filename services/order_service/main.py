@@ -18,6 +18,7 @@ from middleware.config import Settings, get_settings
 from middleware.observability.correlation import CorrelationIdMiddleware
 from middleware.observability.health import router as health_router
 from middleware.observability.logging import configure_logging
+from middleware.observability.openapi_responses import COMMON_RESPONSES
 from middleware.resilience.circuit_breaker import CircuitBreaker
 from middleware.resilience.exceptions import MiddlewareTimeoutError
 from middleware.resilience.fallback import with_fallback
@@ -124,9 +125,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Order Service",
-    description="Microsserviço de gestão e checkout de pedidos do e-commerce",
-    version="0.1.0",
+    title="Order Service API",
+    description="Microsserviço orquestrador de pedidos, checkout e resiliência.",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan,
 )
 app.add_middleware(CorrelationIdMiddleware)
@@ -360,7 +363,15 @@ async def create_payment_endpoint(order: OrderCreateRequest) -> dict[str, Any]:
     return await request_payment_processing(payload)
 
 
-@app.get("/orders", response_model=list[Order])
+@app.get(
+    "/orders",
+    response_model=list[Order],
+    tags=["Pedidos"],
+    responses={
+        401: COMMON_RESPONSES[401],
+        403: COMMON_RESPONSES[403],
+    },
+)
 def list_orders(
     user: UserIdentity = Depends(require_roles(["customer", "admin"])),
 ) -> list[Order]:
@@ -370,7 +381,16 @@ def list_orders(
     return order_repository.list_by_customer(user.user_id)
 
 
-@app.get("/orders/{order_id}", response_model=Order)
+@app.get(
+    "/orders/{order_id}",
+    response_model=Order,
+    tags=["Pedidos"],
+    responses={
+        401: COMMON_RESPONSES[401],
+        403: COMMON_RESPONSES[403],
+        404: COMMON_RESPONSES[404],
+    },
+)
 def get_order_by_id(
     order_id: str,
     user: UserIdentity = Depends(require_roles(["customer", "admin"])),
@@ -390,7 +410,18 @@ def get_order_by_id(
     return order
 
 
-@app.post("/orders")
+@app.post(
+    "/orders",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Pedidos"],
+    responses={
+        400: COMMON_RESPONSES[400],
+        401: COMMON_RESPONSES[401],
+        403: COMMON_RESPONSES[403],
+        409: COMMON_RESPONSES[409],
+        503: COMMON_RESPONSES[503],
+    },
+)
 async def create_order(
     order_in: OrderCreateRequest,
     user: UserIdentity = Depends(require_roles(["customer", "admin"])),
