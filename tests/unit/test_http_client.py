@@ -171,7 +171,7 @@ async def test_headers_explicitos_tem_precedencia_sobre_contexto():
     assert capturado["headers"].get("authorization") == "Bearer token-customizado"
 
 
-async def test_headers_em_kwargs_e_argumento_sao_mesclados():
+async def test_headers_passados_via_kwargs_em_request_e_get():
     capturado = {}
 
     def handler(request):
@@ -179,15 +179,18 @@ async def test_headers_em_kwargs_e_argumento_sao_mesclados():
         return httpx.Response(200)
 
     async with fazer_cliente(handler) as cliente:
+        await cliente.get(
+            "http://svc/check",
+            **{"headers": {"X-Via-Kwargs": "true"}},
+        )
+        assert capturado["headers"].get("x-via-kwargs") == "true"
+
         await cliente.request(
             "GET",
             "http://svc/check",
-            headers={"X-Custom-A": "1"},
-            **{"headers": {"X-Custom-B": "2"}},
+            **{"headers": {"X-Via-Kwargs-Req": "123"}},
         )
-
-    assert capturado["headers"].get("x-custom-a") == "1"
-    assert capturado["headers"].get("x-custom-b") == "2"
+        assert capturado["headers"].get("x-via-kwargs-req") == "123"
 
 
 # ---------- timeout por criticidade ----------
@@ -422,10 +425,10 @@ async def test_injecao_automatica_de_token_s2s_com_service_token_provider():
     token_s2s = capturado["headers"][SERVICE_KEY_HEADER.lower()]
     identity = authenticator.validate_token(
         token_s2s,
-        expected_audience="catalog-service",
-        allowed_callers={"order-service"},
+        audience="catalog-service",
+        allowed_issuers={"order-service"},
     )
-    assert identity.caller == "order-service"
+    assert identity.service == "order-service"
 
 
 # ---------- ciclo de vida do AuthContextMiddleware ----------

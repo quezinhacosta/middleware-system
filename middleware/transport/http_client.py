@@ -57,6 +57,21 @@ class DistributedHttpClient:
             follow_redirects=False,
         )
 
+    def _merge_headers(
+        self,
+        headers: dict[str, str] | httpx.Headers | None,
+        kwargs: dict[str, Any],
+    ) -> dict[str, str] | httpx.Headers | None:
+        """Extrai e mescla headers caso venham simultaneamente como argumento e dentro de kwargs."""
+        kwargs_headers = kwargs.pop("headers", None)
+        if headers is None:
+            return kwargs_headers
+        if kwargs_headers is None:
+            return headers
+        merged = httpx.Headers(kwargs_headers)
+        merged.update(headers)
+        return merged
+
     def _prepare_headers(
         self,
         headers: dict[str, str] | httpx.Headers | None = None,
@@ -105,12 +120,7 @@ class DistributedHttpClient:
             )
 
         # Mescla headers se passados simultaneamente via argumento e kwargs
-        kwargs_headers = kwargs.pop("headers", None)
-        effective_headers = headers or kwargs_headers
-        if headers is not None and kwargs_headers is not None:
-            merged = httpx.Headers(kwargs_headers)
-            merged.update(headers)
-            effective_headers = merged
+        effective_headers = self._merge_headers(headers, kwargs)
 
         limit = get_timeout(criticality)
         start = time.perf_counter()
@@ -164,7 +174,7 @@ class DistributedHttpClient:
             "GET",
             url,
             criticality=criticality,
-            headers=headers,
+            headers=self._merge_headers(headers, kwargs),
             params=params,
             target_audience=target_audience,
             **kwargs,
@@ -189,7 +199,7 @@ class DistributedHttpClient:
             "POST",
             url,
             criticality=criticality,
-            headers=headers,
+            headers=self._merge_headers(headers, kwargs),
             json=json,
             data=data,
             target_audience=target_audience,
@@ -215,7 +225,7 @@ class DistributedHttpClient:
             "PUT",
             url,
             criticality=criticality,
-            headers=headers,
+            headers=self._merge_headers(headers, kwargs),
             json=json,
             data=data,
             target_audience=target_audience,
@@ -236,7 +246,7 @@ class DistributedHttpClient:
             "DELETE",
             url,
             criticality=criticality,
-            headers=headers,
+            headers=self._merge_headers(headers, kwargs),
             params=params,
             target_audience=target_audience,
             **kwargs,
