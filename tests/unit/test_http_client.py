@@ -336,6 +336,7 @@ async def test_erro_de_protocolo_remoto_vira_service_unavailable():
 
 async def test_handler_service_unavailable_retorna_status_503():
     from fastapi import FastAPI
+
     from middleware.resilience.handlers import register_service_unavailable_handler
 
     test_app = FastAPI()
