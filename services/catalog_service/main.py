@@ -12,6 +12,7 @@ from middleware.config import Settings, get_settings
 from middleware.observability.correlation import CorrelationIdMiddleware
 from middleware.observability.health import router as health_router
 from middleware.observability.logging import configure_logging
+from middleware.observability.openapi_responses import COMMON_RESPONSES
 from services.catalog_service.models import (
     Product,
     ProductCreate,
@@ -40,9 +41,12 @@ configure_logging(
 )
 
 app = FastAPI(
-    title="Catalog Service",
-    description="Microsserviço de catálogo e estoque do e-commerce",
-    version="0.1.0",
+    title="Catalog Service API",
+    description="Microsserviço de catálogo e controle atômico de estoque.",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(
@@ -110,7 +114,12 @@ def get_recommendations() -> dict[str, Any]:
     }
 
 
-@app.get("/products", response_model=list[Product])
+@app.get(
+    "/products",
+    response_model=list[Product],
+    tags=["Produtos"],
+    responses={400: COMMON_RESPONSES[400]},
+)
 def list_products(
     response: Response,
     skip: int = Query(0, ge=0, description="Itens para pular (paginação)"),
@@ -133,7 +142,11 @@ def list_products(
     )
 
 
-@app.get("/products/{product_id}")
+@app.get(
+    "/products/{product_id}",
+    tags=["Produtos"],
+    responses={404: COMMON_RESPONSES[404]},
+)
 def get_product(product_id: str) -> dict[str, Any]:
     """Detalhes de um produto específico."""
     product = repository.get_by_id(product_id)
@@ -156,6 +169,8 @@ def get_product(product_id: str) -> dict[str, Any]:
     "/products/{product_id}/reserve",
     response_model=ReserveStockResponse,
     status_code=status.HTTP_200_OK,
+    tags=["Estoque (SAGA)"],
+    responses={404: COMMON_RESPONSES[404], 409: COMMON_RESPONSES[409]},
 )
 def reserve_product_stock(
     product_id: str,
@@ -195,6 +210,8 @@ def reserve_product_stock(
 @app.post(
     "/products/{product_id}/release",
     status_code=status.HTTP_200_OK,
+    tags=["Estoque (SAGA)"],
+    responses={404: COMMON_RESPONSES[404]},
 )
 def release_product_stock(
     product_id: str,
@@ -217,7 +234,16 @@ def release_product_stock(
         ) from exc
 
 
-@app.post("/products", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/products",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Produtos"],
+    responses={
+        400: COMMON_RESPONSES[400],
+        401: COMMON_RESPONSES[401],
+        403: COMMON_RESPONSES[403],
+    },
+)
 def create_product(
     product: ProductCreate,
     user: UserIdentity = Depends(require_roles(["admin"])),

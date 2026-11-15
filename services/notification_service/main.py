@@ -6,7 +6,9 @@ from typing import Any
 from fastapi import FastAPI
 
 from middleware.observability.correlation import CorrelationIdMiddleware
+from middleware.observability.health import router as health_router
 from middleware.observability.logging import configure_logging
+from middleware.observability.openapi_responses import COMMON_RESPONSES
 from services.notification_service.consumer import NotificationConsumer
 from services.notification_service.notifications import handle_event, history
 
@@ -32,20 +34,28 @@ configure_logging(
 )
 
 app = FastAPI(
-    title="Notification Service",
-    description="Notificações de pós-venda e alertas simulados ao cliente",
-    version="0.1.0",
+    title="Notification Service API",
+    description="Microsserviço de notificações de pós-venda e alertas ao cliente.",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
 )
 app.add_middleware(CorrelationIdMiddleware)
+app.include_router(health_router)
 
 
-@app.get("/health")
+@app.get("/health", tags=["Observabilidade"])
 def healthcheck() -> dict[str, str]:
     return {"status": "healthy", "service": "notification-service"}
 
 
-@app.get("/notifications")
+@app.get(
+    "/notifications",
+    tags=["Notificações"],
+    responses={500: COMMON_RESPONSES[500]},
+)
 def list_notifications() -> list[dict[str, Any]]:
     """Últimas notificações enviadas, da mais antiga para a mais recente."""
     return list(history)

@@ -56,7 +56,7 @@ def test_post_order_cria_pedido_com_uuid_v4_e_status_pending(
         headers={"Authorization": "Bearer role=customer,sub=user_123"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
 
     # Valida UUID v4
@@ -259,7 +259,7 @@ def test_post_order_modo_degradado_quando_catalogo_indisponivel(
         headers={"Authorization": "Bearer role=customer,sub=user_123"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
     assert data["status"] == "PENDING"
     assert data["degraded"] is True

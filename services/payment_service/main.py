@@ -24,7 +24,15 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Payment Service", lifespan=lifespan)
+app = FastAPI(
+    title="Payment Service API",
+    description="Microsserviço de processamento assíncrono e liquidação de pagamentos.",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan,
+)
 app.include_router(health_router)
 
 

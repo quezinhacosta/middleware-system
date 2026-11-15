@@ -22,7 +22,7 @@ def make_body(event_name: str, data: dict[str, object]) -> bytes:
         producer_service="payment-service",
         data=data,
     )
-    return envelope.model_dump_json().encode()
+    return str(envelope.model_dump_json()).encode("utf-8")
 
 
 @pytest.fixture(autouse=True)
