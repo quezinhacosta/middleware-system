@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -30,7 +31,9 @@ def export_specs() -> None:
         ("notification-service", "http://localhost:8003", notification_app),
     ]
 
-    unified_spec = {
+    paths: dict[str, Any] = {}
+    schemas: dict[str, Any] = {}
+    unified_spec: dict[str, Any] = {
         "openapi": "3.0.3",
         "info": {
             "title": "E-Commerce Distributed System API",
@@ -46,8 +49,8 @@ def export_specs() -> None:
             {"url": "http://localhost:8002", "description": "Payment Service"},
             {"url": "http://localhost:8003", "description": "Notification Service"},
         ],
-        "paths": {},
-        "components": {"schemas": {}, "securitySchemes": {}},
+        "paths": paths,
+        "components": {"schemas": schemas, "securitySchemes": {}},
     }
 
     for name, server_url, app_instance in services:
@@ -63,17 +66,19 @@ def export_specs() -> None:
         # Mescla rotas e schemas no arquivo unificado docs/api/openapi.yaml
         for path, methods in schema.get("paths", {}).items():
             target_path = (
-                path if path not in unified_spec["paths"] else f"/{name}{path}"
+                path if path not in paths else f"/{name}{path}"
             )
             for method_data in methods.values():
                 if isinstance(method_data, dict):
-                    method_data.setdefault("tags", []).insert(0, name)
-            unified_spec["paths"][target_path] = methods
+                    tags = method_data.setdefault("tags", [])
+                    if isinstance(tags, list):
+                        tags.insert(0, name)
+            paths[target_path] = methods
 
         for comp_name, comp_val in (
             schema.get("components", {}).get("schemas", {}).items()
         ):
-            unified_spec["components"]["schemas"][comp_name] = comp_val
+            schemas[comp_name] = comp_val
 
     unified_file = output_dir / "openapi.yaml"
     with open(unified_file, "w", encoding="utf-8") as f:
