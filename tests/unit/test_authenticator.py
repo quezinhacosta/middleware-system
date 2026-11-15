@@ -1,6 +1,6 @@
+import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-import pytest
 
 from middleware.auth.authenticator import AuthMiddleware
 from middleware.auth.context import auth_token_var
@@ -101,7 +101,9 @@ def test_rota_protegida_com_assinatura_incorreta_retorna_401(client):
 
 
 def test_rota_protegida_com_token_malformado_retorna_401(client):
-    resp = client.get("/orders", headers={"Authorization": "Bearer token.invalido.lixo"})
+    resp = client.get(
+        "/orders", headers={"Authorization": "Bearer token.invalido.lixo"}
+    )
     assert resp.status_code == 401
     data = resp.json()
     assert data["error"] == "unauthorized"

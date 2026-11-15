@@ -100,7 +100,9 @@ def test_catalog_service_reserva_sem_token_retorna_401(catalog_client):
 
 
 def test_catalog_service_reserva_com_token_valido_sucesso(catalog_client, token_mgr):
-    token = token_mgr.create_token(user_id="internal_order_service", roles=["internal_service"])
+    token = token_mgr.create_token(
+        user_id="internal_order_service", roles=["internal_service"]
+    )
     resp = catalog_client.post(
         "/products/1/reserve",
         json={"quantity": 1},

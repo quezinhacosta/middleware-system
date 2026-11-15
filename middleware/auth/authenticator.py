@@ -57,8 +57,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Se protected_paths estiver configurado, apenas rotas que começam com ele são protegidas
         if self.protected_paths is not None:
             is_explicitly_protected = any(
-                path == p or path.startswith(f"{p}/")
-                for p in self.protected_paths
+                path == p or path.startswith(f"{p}/") for p in self.protected_paths
             )
             if not is_explicitly_protected:
                 return True

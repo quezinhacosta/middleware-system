@@ -1,4 +1,3 @@
-import time
 import pytest
 
 from middleware.auth.token_provider import (
@@ -17,7 +16,9 @@ def test_authenticated_user_has_role():
 
 
 def test_geracao_e_verificacao_de_token_valido():
-    manager = TokenManager(secret_key="secret-chave-de-teste-muito-segura-123456", expiration_minutes=30)
+    manager = TokenManager(
+        secret_key="secret-chave-de-teste-muito-segura-123456", expiration_minutes=30
+    )
     token = manager.create_token(user_id="user_abc", roles=["customer", "vip"])
     assert isinstance(token, str)
 
@@ -82,6 +83,7 @@ def test_rejeicao_de_token_malformado():
 def test_endpoint_mock_auth_login():
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
+
     from middleware.auth.token_provider import auth_router
 
     app = FastAPI()
