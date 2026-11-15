@@ -22,7 +22,24 @@ class MiddlewareTimeoutError(Exception):
 class GatewayTimeoutException(MiddlewareTimeoutError):
     """Lançada quando uma chamada HTTP excede o tempo limite esperado (504 Gateway Timeout)."""
 
-    pass
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        url: str | None = None,
+        timeout: float = 0.0,
+        elapsed: float = 0.0,
+        operation: str | None = None,
+    ) -> None:
+        self.message = message
+        super().__init__(
+            url=url,
+            timeout=timeout,
+            elapsed=elapsed,
+            operation=operation,
+        )
+        if message:
+            self.args = (message,)
 
 
 class ServiceUnavailableException(ConnectionError):

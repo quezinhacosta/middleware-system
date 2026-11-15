@@ -283,6 +283,18 @@ async def test_timeout_de_conexao_vira_gateway_timeout():
         assert isinstance(exc.value, MiddlewareTimeoutError)
 
 
+def test_instanciacao_flexivel_gateway_timeout_exception():
+    # Permite mensagem customizada
+    e1 = GatewayTimeoutException("Timeout customizado")
+    assert str(e1) == "Timeout customizado"
+    assert e1.timeout == 0.0
+
+    # Permite instanciacao com kwargs tradicionais
+    e2 = GatewayTimeoutException(url="http://svc/a", timeout=2.0, elapsed=2.1)
+    assert "Timeout de 2.00s excedido" in str(e2)
+    assert e2.url == "http://svc/a"
+
+
 async def test_erro_de_socket_network_vira_service_unavailable():
     def handler(request):
         raise httpx.NetworkError("falha de rota", request=request)
