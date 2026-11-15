@@ -1,3 +1,4 @@
+from .auth.context import AuthContextMiddleware
 from .resilience.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerOpenException,
@@ -10,6 +11,7 @@ from .transport.http_client import (
 )
 
 __all__ = [
+    "AuthContextMiddleware",
     "CircuitBreaker",
     "CircuitBreakerOpenException",
     "CircuitState",

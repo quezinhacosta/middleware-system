@@ -11,8 +11,7 @@ import pika
 from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import ValidationError
 
-from middleware import DistributedHttpClient
-from middleware.auth.context import AuthContextMiddleware
+from middleware import AuthContextMiddleware, DistributedHttpClient
 from middleware.auth.rbac import UserIdentity, require_roles
 from middleware.config import Settings, get_settings
 from middleware.observability.correlation import CorrelationIdMiddleware
