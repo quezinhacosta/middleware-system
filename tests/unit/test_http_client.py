@@ -391,7 +391,9 @@ async def test_put_com_json_e_data_simultaneos_levanta_value_error():
 async def test_request_com_json_e_data_simultaneos_levanta_value_error():
     async with fazer_cliente(lambda req: httpx.Response(200)) as cliente:
         with pytest.raises(ValueError) as exc:
-            await cliente.request("POST", "http://svc/items/1", json={"k": 1}, data="raw-data")
+            await cliente.request(
+                "POST", "http://svc/items/1", json={"k": 1}, data="raw-data"
+            )
         assert "simultaneamente" in str(exc.value)
 
 
