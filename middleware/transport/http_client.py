@@ -104,9 +104,19 @@ class DistributedHttpClient:
                 "Não é permitido enviar 'json' e 'data' simultaneamente na mesma requisição."
             )
 
+        # Mescla headers se passados simultaneamente via argumento e kwargs
+        kwargs_headers = kwargs.pop("headers", None)
+        effective_headers = headers or kwargs_headers
+        if headers is not None and kwargs_headers is not None:
+            merged = httpx.Headers(kwargs_headers)
+            merged.update(headers)
+            effective_headers = merged
+
         limit = get_timeout(criticality)
         start = time.perf_counter()
-        req_headers = self._prepare_headers(headers, target_audience=target_audience)
+        req_headers = self._prepare_headers(
+            effective_headers, target_audience=target_audience
+        )
 
         try:
             return await run_with_deadline(

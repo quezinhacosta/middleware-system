@@ -171,6 +171,25 @@ async def test_headers_explicitos_tem_precedencia_sobre_contexto():
     assert capturado["headers"].get("authorization") == "Bearer token-customizado"
 
 
+async def test_headers_em_kwargs_e_argumento_sao_mesclados():
+    capturado = {}
+
+    def handler(request):
+        capturado["headers"] = dict(request.headers)
+        return httpx.Response(200)
+
+    async with fazer_cliente(handler) as cliente:
+        await cliente.request(
+            "GET",
+            "http://svc/check",
+            headers={"X-Custom-A": "1"},
+            **{"headers": {"X-Custom-B": "2"}},
+        )
+
+    assert capturado["headers"].get("x-custom-a") == "1"
+    assert capturado["headers"].get("x-custom-b") == "2"
+
+
 # ---------- timeout por criticidade ----------
 
 
