@@ -65,9 +65,7 @@ def export_specs() -> None:
 
         # Mescla rotas e schemas no arquivo unificado docs/api/openapi.yaml
         for path, methods in schema.get("paths", {}).items():
-            target_path = (
-                path if path not in paths else f"/{name}{path}"
-            )
+            target_path = path if path not in paths else f"/{name}{path}"
             for method_data in methods.values():
                 if isinstance(method_data, dict):
                     tags = method_data.setdefault("tags", [])
