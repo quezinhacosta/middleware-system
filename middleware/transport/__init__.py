@@ -1,4 +1,4 @@
-"""Camada de transporte do middleware (mensageria)."""
+"""Camada de transporte do middleware (HTTP e mensageria)."""
 
 from .consumer import (
     EventConsumer,
@@ -6,6 +6,11 @@ from .consumer import (
     TransientError,
     UnrecoverableError,
     declare_topology,
+)
+from .http_client import (
+    DistributedHttpClient,
+    GatewayTimeoutException,
+    ServiceUnavailableException,
 )
 from .idempotency import (
     IdempotencyManager,
@@ -15,6 +20,9 @@ from .idempotency import (
 )
 
 __all__ = [
+    "DistributedHttpClient",
+    "GatewayTimeoutException",
+    "ServiceUnavailableException",
     "EventConsumer",
     "IdempotencyManager",
     "IdempotentConsumerInterceptor",
