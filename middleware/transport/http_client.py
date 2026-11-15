@@ -99,6 +99,11 @@ class DistributedHttpClient:
         **kwargs: Any,
     ) -> httpx.Response:
         """Executa requisição HTTP com mapeamento de falhas e prazos de resiliência."""
+        if kwargs.get("json") is not None and kwargs.get("data") is not None:
+            raise ValueError(
+                "Não é permitido enviar 'json' e 'data' simultaneamente na mesma requisição."
+            )
+
         limit = get_timeout(criticality)
         start = time.perf_counter()
         req_headers = self._prepare_headers(headers, target_audience=target_audience)
