@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+
 import yaml
 
 # Garante valores mínimos de ambiente para importar os apps sem abortar
@@ -13,8 +14,8 @@ sys.path.insert(0, str(ROOT_DIR))
 sys.path.insert(0, str(ROOT_DIR / "services" / "payment_service"))
 
 from services.catalog_service.main import app as catalog_app
-from services.order_service.main import app as order_app
 from services.notification_service.main import app as notification_app
+from services.order_service.main import app as order_app
 from services.payment_service.main import app as payment_app
 
 
