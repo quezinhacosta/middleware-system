@@ -27,8 +27,16 @@ COMMON_RESPONSES = {
         "model": ErrorResponse,
         "description": "Conflito de estado ou estoque insuficiente",
     },
+    500: {
+        "model": ErrorResponse,
+        "description": "Erro interno do servidor",
+    },
     503: {
         "model": ErrorResponse,
         "description": "Serviço dependente indisponível (Circuit Breaker aberto)",
+    },
+    504: {
+        "model": ErrorResponse,
+        "description": "Gateway Timeout ao se comunicar com serviços dependentes",
     },
 }
