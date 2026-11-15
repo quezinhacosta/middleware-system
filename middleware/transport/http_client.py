@@ -61,15 +61,16 @@ class DistributedHttpClient:
         self,
         headers: dict[str, str] | httpx.Headers | None,
         kwargs: dict[str, Any],
-    ) -> dict[str, str] | httpx.Headers | None:
+    ) -> httpx.Headers | None:
         """Extrai e mescla headers caso venham simultaneamente como argumento e dentro de kwargs."""
         kwargs_headers = kwargs.pop("headers", None)
-        if headers is None:
-            return kwargs_headers
+        if kwargs_headers is None and headers is None:
+            return None
         if kwargs_headers is None:
-            return headers
+            return httpx.Headers(headers)
         merged = httpx.Headers(kwargs_headers)
-        merged.update(headers)
+        if headers is not None:
+            merged.update(headers)
         return merged
 
     def _prepare_headers(
