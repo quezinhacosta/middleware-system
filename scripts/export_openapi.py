@@ -61,13 +61,17 @@ def export_specs() -> None:
 
         # Mescla rotas e schemas no arquivo unificado docs/api/openapi.yaml
         for path, methods in schema.get("paths", {}).items():
-            target_path = path if path not in unified_spec["paths"] else f"/{name}{path}"
+            target_path = (
+                path if path not in unified_spec["paths"] else f"/{name}{path}"
+            )
             for method_data in methods.values():
                 if isinstance(method_data, dict):
                     method_data.setdefault("tags", []).insert(0, name)
             unified_spec["paths"][target_path] = methods
 
-        for comp_name, comp_val in schema.get("components", {}).get("schemas", {}).items():
+        for comp_name, comp_val in (
+            schema.get("components", {}).get("schemas", {}).items()
+        ):
             unified_spec["components"]["schemas"][comp_name] = comp_val
 
     unified_file = output_dir / "openapi.yaml"
