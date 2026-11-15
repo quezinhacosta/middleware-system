@@ -1,0 +1,500 @@
+openapi: 3.0.3
+info:
+  title: Catalog Service API
+  description: Microsserviço de catálogo e controle atômico de estoque.
+  version: 1.0.0
+paths:
+  /health/live:
+    get:
+      tags:
+      - Healthcheck
+      summary: Liveness Probe
+      description: 'Liveness: Confirma apenas se a aplicação está viva.
+
+        Rota final: GET /health/live'
+      operationId: liveness_probe_health_live_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health/ready:
+    get:
+      tags:
+      - Healthcheck
+      summary: Readiness Probe
+      description: 'Readiness: Confirma se as dependências essenciais estão operacionais.
+
+        Rota final: GET /health/ready'
+      operationId: readiness_probe_health_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /auth/login:
+    post:
+      tags:
+      - Autenticação
+      summary: Login For Test Token
+      description: Endpoint utilitário/mock para emissão de tokens de teste para clientes
+        e admins.
+      operationId: login_for_test_token_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /:
+    get:
+      summary: Read Root
+      operationId: read_root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Read Root  Get
+  /recommendations:
+    get:
+      summary: Get Recommendations
+      operationId: get_recommendations_recommendations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Recommendations Recommendations Get
+  /products:
+    get:
+      tags:
+      - Produtos
+      summary: List Products
+      description: Listagem de produtos com suporte a paginação, filtros e cabeçalho
+        X-Total-Count.
+      operationId: list_products_products_get
+      parameters:
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Itens para pular (paginação)
+          default: 0
+          title: Skip
+        description: Itens para pular (paginação)
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: Limite por página
+          default: 20
+          title: Limit
+        description: Limite por página
+      - name: name
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filtro por nome do produto
+          title: Name
+        description: Filtro por nome do produto
+      - name: min_price
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          description: Preço mínimo
+          title: Min Price
+        description: Preço mínimo
+      - name: max_price
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          description: Preço máximo
+          title: Max Price
+        description: Preço máximo
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+                title: Response List Products Products Get
+        '400':
+          description: Requisição inválida ou parâmetros malformados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      summary: Create Product
+      description: Criação de novos produtos protegida por RBAC (papel admin).
+      operationId: create_product_products_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Create Product Products Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /products/{product_id}:
+    get:
+      summary: Get Product
+      description: Detalhes de um produto específico.
+      operationId: get_product_products__product_id__get
+      parameters:
+      - name: product_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Product Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Product Products  Product Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /products/{product_id}/reserve:
+    post:
+      summary: Reserve Product Stock
+      description: Reserva temporária de quantidade com validação atômica de concorrência.
+      operationId: reserve_product_stock_products__product_id__reserve_post
+      parameters:
+      - name: product_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Product Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/ReserveStockRequest'
+              - type: 'null'
+              title: Payload
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReserveStockResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /products/{product_id}/release:
+    post:
+      summary: Release Product Stock
+      description: Estorno/Compensação (SAGA) de estoque previamente reservado.
+      operationId: release_product_stock_products__product_id__release_post
+      parameters:
+      - name: product_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Product Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/ReserveStockRequest'
+              - type: 'null'
+              title: Payload
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Release Product Stock Products  Product Id  Release
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    ErrorResponse:
+      properties:
+        detail:
+          type: string
+          title: Detail
+          description: Descrição detalhada do erro ocorrido
+          examples:
+          - Recurso não encontrado ou acesso negado
+      type: object
+      required:
+      - detail
+      title: ErrorResponse
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LoginRequest:
+      properties:
+        username:
+          type: string
+          title: Username
+          description: Identificador do usuário (sub)
+          default: customer_user
+        roles:
+          items:
+            type: string
+          type: array
+          title: Roles
+          description: 'Lista de papéis do usuário (ex: [''customer''], [''admin''])'
+        expires_in_seconds:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Expires In Seconds
+          description: Tempo de validade customizado em segundos
+      type: object
+      title: LoginRequest
+    LoginResponse:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+        token_type:
+          type: string
+          title: Token Type
+          default: bearer
+        expires_in:
+          type: integer
+          title: Expires In
+        user_id:
+          type: string
+          title: User Id
+        roles:
+          items:
+            type: string
+          type: array
+          title: Roles
+      type: object
+      required:
+      - access_token
+      - expires_in
+      - user_id
+      - roles
+      title: LoginResponse
+    Product:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Identificador único do produto
+        name:
+          type: string
+          minLength: 1
+          title: Name
+          description: Nome do produto
+        price:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Price
+          description: Preço unitário
+        stock_quantity:
+          type: integer
+          minimum: 0.0
+          title: Stock Quantity
+          description: Quantidade disponível em estoque
+      type: object
+      required:
+      - id
+      - name
+      - price
+      - stock_quantity
+      title: Product
+      description: Entidade do produto no catálogo.
+    ProductCreate:
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: Name
+          description: Nome do produto
+        price:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Price
+          description: Preço unitário
+        stock_quantity:
+          type: integer
+          minimum: 0.0
+          title: Stock Quantity
+          description: Quantidade inicial em estoque
+          default: 0
+      type: object
+      required:
+      - name
+      - price
+      title: ProductCreate
+      description: Payload para criação de novo produto.
+    ReserveStockRequest:
+      properties:
+        quantity:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Quantity
+          description: Quantidade solicitada para reserva
+      type: object
+      required:
+      - quantity
+      title: ReserveStockRequest
+      description: Payload para solicitação de reserva temporária de estoque.
+    ReserveStockResponse:
+      properties:
+        product_id:
+          type: string
+          title: Product Id
+        reserved_quantity:
+          type: integer
+          title: Reserved Quantity
+        remaining_stock:
+          type: integer
+          title: Remaining Stock
+        unit_price:
+          type: number
+          minimum: 0.0
+          title: Unit Price
+          description: Preço unitário do item reservado
+          default: 0.0
+        product_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Name
+          description: Nome do produto
+        status:
+          type: string
+          title: Status
+          default: reserved
+      type: object
+      required:
+      - product_id
+      - reserved_quantity
+      - remaining_stock
+      title: ReserveStockResponse
+      description: Resposta de confirmação de reserva de estoque.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer
+servers:
+- url: http://localhost:8001
+  description: catalog-service

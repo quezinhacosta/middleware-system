@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: Notification Service
+  description: Notificações de pós-venda e alertas simulados ao cliente
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      summary: Healthcheck
+      operationId: healthcheck_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Healthcheck Health Get
+  /notifications:
+    get:
+      summary: List Notifications
+      description: Últimas notificações enviadas, da mais antiga para a mais recente.
+      operationId: list_notifications_notifications_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  additionalProperties: true
+                  type: object
+                type: array
+                title: Response List Notifications Notifications Get
+servers:
+- url: http://localhost:8003
+  description: notification-service

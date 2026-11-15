@@ -1,14 +1,15 @@
-"""Respostas padronizadas para documentação OpenAPI/Swagger dos microsserviços."""
+from pydantic import BaseModel, Field
 
-from typing import Any
 
-COMMON_RESPONSES: dict[int, dict[str, Any]] = {
-    400: {"description": "Requisição inválida ou parâmetros ausentes/malformados."},
-    401: {"description": "Não autorizado. Token de autenticação ausente, inválido ou expirado."},
-    403: {"description": "Acesso negado. O usuário não possui a permissão/role necessária."},
-    404: {"description": "Recurso não encontrado."},
-    409: {"description": "Conflito de estado de recurso (ex.: estoque insuficiente ou duplicação)."},
-    500: {"description": "Erro interno do servidor."},
-    503: {"description": "Serviço temporariamente indisponível ou Circuit Breaker aberto."},
-    504: {"description": "Gateway Timeout ao se comunicar com serviços dependentes."},
+class ErrorResponse(BaseModel):
+    detail: str = Field(..., description="Descrição detalhada do erro ocorrido", examples=["Recurso não encontrado ou acesso negado"])
+
+
+COMMON_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Requisição inválida ou parâmetros malformados"},
+    401: {"model": ErrorResponse, "description": "Token JWT ausente, inválido ou expirado"},
+    403: {"model": ErrorResponse, "description": "Usuário autenticado sem permissão (RBAC) para esta operação"},
+    404: {"model": ErrorResponse, "description": "Recurso solicitado não encontrado"},
+    409: {"model": ErrorResponse, "description": "Conflito de estado ou estoque insuficiente"},
+    503: {"model": ErrorResponse, "description": "Serviço dependente indisponível (Circuit Breaker aberto)"},
 }

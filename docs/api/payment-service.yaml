@@ -1,0 +1,38 @@
+openapi: 3.0.3
+info:
+  title: Payment Service
+  version: 0.1.0
+paths:
+  /health/live:
+    get:
+      tags:
+      - Healthcheck
+      summary: Liveness Probe
+      description: 'Liveness: Confirma apenas se a aplicação está viva.
+
+        Rota final: GET /health/live'
+      operationId: liveness_probe_health_live_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health/ready:
+    get:
+      tags:
+      - Healthcheck
+      summary: Readiness Probe
+      description: 'Readiness: Confirma se as dependências essenciais estão operacionais.
+
+        Rota final: GET /health/ready'
+      operationId: readiness_probe_health_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+servers:
+- url: http://localhost:8002
+  description: payment-service
