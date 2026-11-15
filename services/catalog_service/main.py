@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from pydantic import ValidationError
 
+from middleware.auth import AuthMiddleware, auth_router
 from middleware.auth.rbac import UserIdentity, require_roles
 from middleware.config import Settings, get_settings
 from middleware.observability.correlation import CorrelationIdMiddleware
@@ -44,8 +45,13 @@ app = FastAPI(
     version="0.1.0",
 )
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(
+    AuthMiddleware,
+    protected_routes=[("POST", "/products")],
+)
 
 app.include_router(health_router)
+app.include_router(auth_router)
 
 # Dados mock (seeds) iniciais para popular o repositório
 INITIAL_SEEDS: dict[str, dict[str, Any]] = {

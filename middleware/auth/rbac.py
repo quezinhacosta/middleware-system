@@ -7,8 +7,10 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from middleware.auth.token_provider import AuthenticatedUser, TokenManager
 
 logger = logging.getLogger(__name__)
 
@@ -23,18 +25,32 @@ class UserIdentity:
 
 
 def get_current_user(
+    request: Request,
     token: HTTPAuthorizationCredentials | None = Depends(oauth2_scheme),
 ) -> UserIdentity:
-    """Extrai a identidade do usuário a partir do token (Simulação).
+    """Extrai a identidade do usuário a partir do token ou do contexto injetado pelo AuthMiddleware."""
+    # 1. Se AuthMiddleware já autenticou e injetou o usuário em request.state.user
+    state_user = getattr(request.state, "user", None)
+    if isinstance(state_user, AuthenticatedUser):
+        return UserIdentity(user_id=state_user.user_id, roles=state_user.roles)
 
-    No projeto, assumimos que o token possui as claims 'sub' (user_id) e 'roles'.
-    Para testabilidade, passamos os roles na própria string do token (ex: 'Bearer role=admin').
-    """
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de usuário ausente",
         )
+
+    # 2. Se for um token JWT assinado, valida com TokenManager
+    token_str = token.credentials
+    try:
+        manager = TokenManager()
+        claims = manager.verify_token(token_str)
+        return UserIdentity(
+            user_id=str(claims["sub"]),
+            roles=list(claims.get("roles", ["customer"])),
+        )
+    except Exception:
+        pass
 
     # MOCK: Lê as claims 'sub' e 'roles' da string do token para testes sem precisar assinar JWTs reais.
     # Em um ambiente real, aqui haveria a decodificação e validação do JWT do usuário.

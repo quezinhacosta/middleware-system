@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import ValidationError
 
 from middleware import AuthContextMiddleware, DistributedHttpClient
+from middleware.auth import AuthMiddleware, auth_router
 from middleware.auth.rbac import UserIdentity, require_roles
 from middleware.config import Settings, get_settings
 from middleware.observability.correlation import CorrelationIdMiddleware
@@ -129,9 +130,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(
+    AuthMiddleware,
+    protected_paths={"/orders"},
+)
 app.add_middleware(AuthContextMiddleware)
 
 app.include_router(health_router)
+app.include_router(auth_router)
 register_resilience_handlers(app)
 
 
