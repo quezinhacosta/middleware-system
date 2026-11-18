@@ -97,6 +97,28 @@ class OrderRepository:
                 payment_method=order.payment_method,
             )
 
+    def transition(
+        self, order_id: str, expected: OrderStatus, new_status: OrderStatus
+    ) -> Order | None:
+        """Troca o status só se o pedido estiver em ``expected`` (compare-and-set).
+
+        Retorna o pedido atualizado, ou None se ele não existe ou já mudou de estado.
+        Garante que um resultado de pagamento repetido não seja aplicado duas vezes.
+        """
+        with self._lock:
+            order = self._orders.get(order_id)
+            if order is None or order.status != expected:
+                return None
+            order.status = new_status
+            return Order(
+                id=order.id,
+                customer_id=order.customer_id,
+                items=[item.model_copy() for item in order.items],
+                total_amount=order.total_amount,
+                status=order.status,
+                payment_method=order.payment_method,
+            )
+
     def clear(self) -> None:
         """Limpa todo o repositório (útil para testes unitários)."""
         with self._lock:

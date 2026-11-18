@@ -42,6 +42,14 @@ class Order(BaseModel):
     )
 
 
+class CatalogProductCreate(BaseModel):
+    """Cadastro de produto encaminhado ao catalog-service (papel admin)."""
+
+    name: str = Field(min_length=1, description="Nome do produto")
+    price: float = Field(gt=0.0, description="Preço unitário")
+    stock_quantity: int = Field(ge=0, default=10, description="Estoque inicial")
+
+
 class OrderCreateRequest(BaseModel):
     """Payload para solicitação de criação de um novo pedido."""
 
@@ -54,3 +62,8 @@ class OrderCreateRequest(BaseModel):
     )
     quantity: int = Field(default=1, ge=1, description="Quantidade de produto")
     payment_method: str = Field(default="PIX", description="Forma de pagamento")
+    customer_email: str | None = Field(
+        default=None,
+        max_length=254,
+        description="E-mail para as notificações do pedido (opcional)",
+    )
