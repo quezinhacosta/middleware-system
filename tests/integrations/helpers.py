@@ -20,6 +20,7 @@ CONTAINERS = ["message-broker", "order-service", "catalog-service", "payment-ser
 TEST_ENV = {
     "RABBITMQ_DEFAULT_USER": "teste_user",
     "RABBITMQ_DEFAULT_PASS": "teste_pass_nao_e_de_producao",
+    "GRAFANA_ADMIN_PASSWORD": "teste_grafana_nao_e_de_producao",
     "JWT_SECRET_KEY": "segredo-de-teste-integracao-com-mais-de-32-bytes",
     "ENVIRONMENT": "testing",
 }
