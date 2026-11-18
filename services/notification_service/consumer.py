@@ -67,10 +67,14 @@ class NotificationConsumer:
         properties: BasicProperties,
         body: bytes,
     ) -> None:
+        delivery_tag = method.delivery_tag
+        if delivery_tag is None:
+            logger.error("mensagem recebida sem delivery_tag; ignorando")
+            return
         try:
             self._handler(body)
         except Exception:
             logger.exception("falha ao processar mensagem da fila")
-            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            channel.basic_nack(delivery_tag=delivery_tag, requeue=False)
             return
-        channel.basic_ack(delivery_tag=method.delivery_tag)
+        channel.basic_ack(delivery_tag=delivery_tag)

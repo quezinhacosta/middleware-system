@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 
 import pika
+from pika.exchange_type import ExchangeType
 
 from middleware.transport.publisher import EventEnvelope
 
@@ -46,7 +47,11 @@ def publish_event(event_data: dict[str, Any]) -> None:
     try:
         channel = connection.channel()
         channel.exchange_declare(
-            exchange=PAYMENTS_EXCHANGE, exchange_type="direct", durable=True
+            exchange=PAYMENTS_EXCHANGE,
+            # ExchangeType("direct") em vez de ExchangeType.direct: nos stubs do pika
+            # os membros do enum estão tipados como `str`, e o mypy rejeitaria.
+            exchange_type=ExchangeType("direct"),
+            durable=True,
         )
         for queue in RESULT_QUEUES:
             channel.queue_declare(queue=queue, durable=True)

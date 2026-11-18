@@ -2,7 +2,10 @@
 transição de status do pedido no order-service (SAGA)."""
 
 import importlib
+from collections.abc import Iterator
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -16,7 +19,7 @@ PAYMENT_DIR = Path(__file__).resolve().parents[2] / "services" / "payment_servic
 
 
 @pytest.fixture
-def payment_src(monkeypatch):
+def payment_src(monkeypatch: pytest.MonkeyPatch) -> tuple[ModuleType, ModuleType]:
     monkeypatch.syspath_prepend(str(PAYMENT_DIR))  # o serviço importa `src.*`
     return (
         importlib.import_module("src.publisher"),
@@ -27,7 +30,9 @@ def payment_src(monkeypatch):
 # ---------- payment-service ----------
 
 
-def test_resultado_e_publicado_no_envelope_que_o_notification_entende(payment_src):
+def test_resultado_e_publicado_no_envelope_que_o_notification_entende(
+    payment_src: tuple[ModuleType, ModuleType],
+) -> None:
     publisher, _ = payment_src
     envelope = publisher.build_envelope(
         {
@@ -50,13 +55,17 @@ def test_resultado_e_publicado_no_envelope_que_o_notification_entende(payment_sr
     }
 
 
-def test_envelope_gera_correlation_id_quando_ausente(payment_src):
+def test_envelope_gera_correlation_id_quando_ausente(
+    payment_src: tuple[ModuleType, ModuleType],
+) -> None:
     publisher, _ = payment_src
     envelope = publisher.build_envelope({"order_id": "o", "status": "payment.rejected"})
     assert envelope.correlation_id
 
 
-def test_consumer_aceita_envelope_padrao_e_formato_plano(payment_src):
+def test_consumer_aceita_envelope_padrao_e_formato_plano(
+    payment_src: tuple[ModuleType, ModuleType],
+) -> None:
     _, consumer = payment_src
     plano = {"event_id": "e1", "order_id": "o1"}
     assert consumer.extract_order_data(plano) is plano
@@ -78,7 +87,7 @@ def test_consumer_aceita_envelope_padrao_e_formato_plano(payment_src):
         {"order_id": "o1", "status": "payment.approved"},
     ],
 )
-def test_parse_payment_result(envelope):
+def test_parse_payment_result(envelope: dict[str, Any]) -> None:
     assert parse_payment_result(envelope) == ("o1", "payment.approved")
 
 
@@ -89,13 +98,13 @@ def test_parse_payment_result(envelope):
         {"data": {"order_id": "o1", "status": "payment.unknown"}},
     ],
 )
-def test_parse_payment_result_invalido_vai_para_dlq(envelope):
+def test_parse_payment_result_invalido_vai_para_dlq(envelope: dict[str, Any]) -> None:
     with pytest.raises(UnrecoverableError):
         parse_payment_result(envelope)
 
 
 @pytest.fixture
-def pedido_pendente():
+def pedido_pendente() -> Iterator[Order]:
     order_main.order_repository.clear()
     order_main.ORDER_RESERVATIONS.clear()
     order = Order(
@@ -112,26 +121,26 @@ def pedido_pendente():
 
 
 def test_pagamento_aprovado_confirma_pedido_sem_liberar_estoque(
-    pedido_pendente, monkeypatch
-):
-    liberados = []
+    pedido_pendente: Order, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    liberados: list[tuple[str, int]] = []
     monkeypatch.setattr(
         order_main, "_release_stock_sync", lambda p, q: liberados.append((p, q))
     )
 
     order_main.handle_payment_result_event("ord-1", "payment.approved")
 
-    assert (
-        order_main.order_repository.get_by_id("ord-1").status == OrderStatus.CONFIRMED
-    )
+    pedido = order_main.order_repository.get_by_id("ord-1")
+    assert pedido is not None
+    assert pedido.status == OrderStatus.CONFIRMED
     assert liberados == []
     assert "ord-1" not in order_main.ORDER_RESERVATIONS
 
 
 def test_pagamento_recusado_cancela_e_compensa_estoque_uma_unica_vez(
-    pedido_pendente, monkeypatch
-):
-    liberados = []
+    pedido_pendente: Order, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    liberados: list[tuple[str, int]] = []
     monkeypatch.setattr(
         order_main, "_release_stock_sync", lambda p, q: liberados.append((p, q))
     )
@@ -139,33 +148,37 @@ def test_pagamento_recusado_cancela_e_compensa_estoque_uma_unica_vez(
     order_main.handle_payment_result_event("ord-1", "payment.rejected")
     order_main.handle_payment_result_event("ord-1", "payment.rejected")  # duplicado
 
-    assert (
-        order_main.order_repository.get_by_id("ord-1").status == OrderStatus.CANCELLED
-    )
+    pedido = order_main.order_repository.get_by_id("ord-1")
+    assert pedido is not None
+    assert pedido.status == OrderStatus.CANCELLED
     assert liberados == [("1", 2)]
 
 
-def test_resultado_nao_reverte_pedido_ja_finalizado(pedido_pendente, monkeypatch):
+def test_resultado_nao_reverte_pedido_ja_finalizado(
+    pedido_pendente: Order, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(order_main, "_release_stock_sync", lambda p, q: None)
     order_main.handle_payment_result_event("ord-1", "payment.approved")
     order_main.handle_payment_result_event("ord-1", "payment.rejected")
 
-    assert (
-        order_main.order_repository.get_by_id("ord-1").status == OrderStatus.CONFIRMED
-    )
+    pedido = order_main.order_repository.get_by_id("ord-1")
+    assert pedido is not None
+    assert pedido.status == OrderStatus.CONFIRMED
 
 
-def test_post_order_aplica_resultado_do_pagamento_sincrono(monkeypatch):
+def test_post_order_aplica_resultado_do_pagamento_sincrono(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from fastapi.testclient import TestClient
 
     from middleware.auth.token_provider import TokenManager
 
     order_main.order_repository.clear()
 
-    async def fake_reserve(product_id, quantity):
+    async def fake_reserve(product_id: str, quantity: int) -> dict[str, float]:
         return {"unit_price": 50.0}
 
-    async def fake_payment(payload):
+    async def fake_payment(payload: dict[str, Any]) -> dict[str, Any]:
         assert payload["correlation_id"] == "corr-xyz"
         return {
             "order_id": payload["order_id"],
