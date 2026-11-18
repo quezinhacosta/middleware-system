@@ -17,9 +17,19 @@ services:
     # Impede que o notification-service consuma as filas payment.approved/rejected
     # durante o teste E2E de idempotência, permitindo que o teste verifique o tamanho da fila.
     command: ["python", "-c", "import time; time.sleep(3600)"]
+    # Sem o servidor HTTP (substituído pelo sleep acima), /health/ready nunca responde.
+    # Desativa o healthcheck só neste override, para o `up --wait` não falhar por ele.
+    healthcheck:
+      disable: true
 
 volumes:
   rabbitmq_data:
     name: rabbitmq_data_test
   payment_idempotency:
     name: payment_idempotency_test
+  # Prometheus e Grafana também precisam de volumes isolados: sem isso, o `down -v`
+  # do teste removeria o histórico de métricas de desenvolvimento.
+  prometheus_data:
+    name: prometheus_data_test
+  grafana_data:
+    name: grafana_data_test
