@@ -53,6 +53,21 @@ def test_usa_email_do_cliente_quando_informado() -> None:
     assert notification["message"] == "Pedido 3 cancelado"
 
 
+def test_sem_email_usa_o_identificador_do_cliente() -> None:
+    body = make_body("payment.approved", {"order_id": 4, "customer_id": "ana"})
+
+    assert handle_event(body)["to"] == "ana"
+
+
+def test_email_tem_prioridade_sobre_o_identificador() -> None:
+    body = make_body(
+        "payment.rejected",
+        {"order_id": 5, "customer_id": "ana", "customer_email": "ana@loja.com"},
+    )
+
+    assert handle_event(body)["to"] == "ana@loja.com"
+
+
 def test_evento_desconhecido_levanta_erro() -> None:
     envelope = EventEnvelope.model_validate_json(make_body("order.created", {}))
 

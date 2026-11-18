@@ -15,7 +15,7 @@ from middleware.resilience.timeout_config import Criticality
 
 
 @pytest.mark.asyncio
-async def test_async_call_is_cancelled_at_deadline():
+async def test_async_call_is_cancelled_at_deadline() -> None:
     cancelled = asyncio.Event()
 
     @with_timeout(1.0)
@@ -36,7 +36,7 @@ async def test_async_call_is_cancelled_at_deadline():
     assert exc.value.url == "http://catalog/products/1"
 
 
-def test_sync_call_returns_control_at_deadline():
+def test_sync_call_returns_control_at_deadline() -> None:
     @with_timeout(1.0)
     def slow():
         time.sleep(3)
@@ -47,7 +47,7 @@ def test_sync_call_returns_control_at_deadline():
     assert time.perf_counter() - start < 1.5
 
 
-def test_fast_call_is_unaffected():
+def test_fast_call_is_unaffected() -> None:
     @with_timeout(1.0)
     def fast():
         return "ok"
@@ -55,7 +55,7 @@ def test_fast_call_is_unaffected():
     assert fast() == "ok"
 
 
-def test_route_returns_504_with_json_log(caplog):
+def test_route_returns_504_with_json_log(caplog: pytest.LogCaptureFixture) -> None:
     app = FastAPI()
     register_timeout_handler(app)
 
@@ -83,7 +83,7 @@ def test_route_returns_504_with_json_log(caplog):
 
 
 @pytest.mark.asyncio
-async def test_limit_read_from_env(monkeypatch):
+async def test_limit_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TIMEOUT_CATALOG_SECONDS", "0.2")
 
     @with_timeout(Criticality.CATALOG)
@@ -97,7 +97,9 @@ async def test_limit_read_from_env(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_invalid_env_falls_back_to_default(monkeypatch):
+async def test_invalid_env_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("TIMEOUT_PAYMENT_SECONDS", "abc")
 
     @with_timeout(Criticality.PAYMENT)
@@ -108,7 +110,7 @@ async def test_invalid_env_falls_back_to_default(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_http_client_aborts_slow_request():
+async def test_http_client_aborts_slow_request() -> None:
     async def slow_handler(request: httpx.Request) -> httpx.Response:
         await asyncio.sleep(3)  # serviço lento simulado
         return httpx.Response(200, json={"ok": True})
@@ -119,8 +121,6 @@ async def test_http_client_aborts_slow_request():
     start = time.perf_counter()
     async with http:
         with pytest.raises(MiddlewareTimeoutError) as exc:
-            await http.request(
-                "GET", "http://catalog:8000/products/1", timeout_override=None
-            ) if False else await http.get_catalog("http://catalog:8000/products/1")
+            await http.get_catalog("http://catalog:8000/products/1")
     assert time.perf_counter() - start < 2.0  # catálogo = 1.5s, não 3s
     assert exc.value.url == "http://catalog:8000/products/1"

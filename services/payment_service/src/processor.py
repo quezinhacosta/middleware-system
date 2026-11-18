@@ -27,5 +27,9 @@ def process_payment(order_data: dict) -> dict:
         "payment_method": payment_method,
         "processed_at": datetime.now(UTC).isoformat(),
     }
+    # Propaga rastreio e destinatário do pedido até o evento de resultado
+    for field in ("correlation_id", "customer_id", "customer_email"):
+        if order_data.get(field):
+            result_event[field] = order_data[field]
 
     return result_event

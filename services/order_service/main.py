@@ -15,7 +15,11 @@ from middleware import AuthContextMiddleware, DistributedHttpClient
 from middleware.auth import AuthMiddleware, auth_router
 from middleware.auth.rbac import UserIdentity, require_roles
 from middleware.config import Settings, get_settings
-from middleware.observability.correlation import CorrelationIdMiddleware
+from middleware.observability.correlation import (
+    CORRELATION_HEADER,
+    CorrelationIdMiddleware,
+    get_correlation_id,
+)
 from middleware.observability.health import router as health_router
 from middleware.observability.logging import configure_logging
 from middleware.observability.openapi_responses import COMMON_RESPONSES
@@ -26,10 +30,16 @@ from middleware.resilience.handlers import register_resilience_handlers
 from middleware.resilience.retry import RetryPolicy
 from middleware.transport.consumer import Topology, declare_topology
 from services.order_service.models import (
+    CatalogProductCreate,
     Order,
     OrderCreateRequest,
     OrderItem,
     OrderStatus,
+)
+from services.order_service.payment_events import (
+    PAYMENT_APPROVED,
+    PAYMENT_RESULTS,
+    PaymentResultListener,
 )
 from services.order_service.repository import OrderRepository
 
@@ -54,6 +64,10 @@ PAYMENT_QUEUE = os.getenv("PAYMENT_QUEUE", "order.created")
 
 # Repositório em memória thread-safe para armazenar pedidos
 order_repository = OrderRepository()
+
+# Itens efetivamente reservados no catálogo por pedido (para compensar na recusa).
+# Em modo degradado o item não é reservado, então não entra aqui.
+ORDER_RESERVATIONS: dict[str, list[tuple[str, int]]] = {}
 
 # Cache local de contingência para produtos quando o Catalog Service estiver indisponível
 LOCAL_PRODUCT_CACHE: dict[str, dict[str, Any]] = {
@@ -117,7 +131,11 @@ def get_http_client() -> DistributedHttpClient:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Consome payment.approved / payment.rejected para fechar a SAGA do pedido
+    listener = PaymentResultListener(_rabbitmq_params(), handle_payment_result_event)
+    listener.start()
     yield
+    listener.stop()
     global _http_client
     if _http_client is not None:
         await _http_client.aclose()
@@ -172,6 +190,68 @@ def _product_details_fallback(product_id: int | str) -> dict[str, Any]:
         "degraded": True,
         "source": "fallback_default",
     }
+
+
+def _rabbitmq_params() -> pika.ConnectionParameters:
+    credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
+    return pika.ConnectionParameters(
+        host=RABBITMQ_HOST, port=RABBITMQ_PORT, credentials=credentials
+    )
+
+
+# ---------- Resultado do pagamento (SAGA) ----------
+
+
+def _apply_payment_result(order_id: str, payment_status: str) -> Order | None:
+    """PENDING -> CONFIRMED (aprovado) ou CANCELLED (recusado).
+
+    Só age se o pedido ainda estiver PENDING: o mesmo resultado pode chegar pela
+    resposta HTTP e pelo evento, e deve ser aplicado uma única vez.
+    """
+    new_status = (
+        OrderStatus.CONFIRMED
+        if payment_status == PAYMENT_APPROVED
+        else OrderStatus.CANCELLED
+    )
+    order = order_repository.transition(order_id, OrderStatus.PENDING, new_status)
+    if order is not None:
+        logger.info(
+            "Pedido %s atualizado para %s (%s)", order_id, new_status, payment_status
+        )
+    return order
+
+
+def _release_stock_sync(product_id: str, quantity: int) -> None:
+    """Compensação fora do event loop (thread do consumidor)."""
+    headers = {}
+    correlation_id = get_correlation_id()
+    if correlation_id:
+        headers[CORRELATION_HEADER] = correlation_id
+    try:
+        resp = httpx.post(
+            f"{CATALOG_SERVICE_URL}/products/{product_id}/release",
+            json={"quantity": quantity},
+            headers=headers,
+            timeout=settings.HTTP_TIMEOUT_SECONDS,
+        )
+        if not resp.is_success:
+            logger.warning(
+                "Falha ao liberar estoque do produto %s (status %s)",
+                product_id,
+                resp.status_code,
+            )
+    except httpx.HTTPError as exc:
+        logger.error("Erro ao compensar estoque do produto %s: %s", product_id, exc)
+
+
+def handle_payment_result_event(order_id: str, payment_status: str) -> None:
+    """Handler do evento de pagamento recebido do broker."""
+    order = _apply_payment_result(order_id, payment_status)
+    if order is not None and order.status == OrderStatus.CANCELLED:
+        for product_id, quantity in ORDER_RESERVATIONS.pop(order_id, []):
+            _release_stock_sync(product_id, quantity)
+    elif order is not None:
+        ORDER_RESERVATIONS.pop(order_id, None)
 
 
 def _enqueue_payment_for_background(envelope: dict[str, Any]) -> bool:
@@ -347,6 +427,62 @@ async def get_product_details_endpoint(product_id: int) -> dict[str, Any]:
     return await fetch_product_details(product_id)
 
 
+def _raise_catalog_error(resp: httpx.Response) -> None:
+    """Repassa ao cliente os erros de negócio/autorização devolvidos pelo catálogo."""
+    if resp.status_code in (400, 401, 403, 404, 409, 422):
+        try:
+            detail = resp.json().get("detail", resp.text)
+        except ValueError:
+            detail = resp.text
+        raise HTTPException(status_code=resp.status_code, detail=detail)
+    resp.raise_for_status()
+
+
+@app.get(
+    "/catalog/products",
+    tags=["Catálogo"],
+    responses={503: COMMON_RESPONSES[503], 504: COMMON_RESPONSES[504]},
+)
+async def list_catalog_products() -> list[dict[str, Any]]:
+    """Lista os produtos do catalog-service (gateway: o catálogo não é público)."""
+    resp = await get_http_client().get_catalog(f"{CATALOG_SERVICE_URL}/products")
+    _raise_catalog_error(resp)
+    data: list[dict[str, Any]] = resp.json()
+    return data
+
+
+@app.post(
+    "/catalog/products",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Catálogo"],
+    responses={
+        400: COMMON_RESPONSES[400],
+        401: COMMON_RESPONSES[401],
+        403: COMMON_RESPONSES[403],
+        503: COMMON_RESPONSES[503],
+        504: COMMON_RESPONSES[504],
+    },
+)
+async def create_catalog_product(
+    product: CatalogProductCreate,
+    user: UserIdentity = Depends(require_roles(["admin"])),
+) -> dict[str, Any]:
+    """Cadastra um produto no catalog-service (papel admin).
+
+    O order-service valida o papel na borda e o middleware repassa o mesmo token
+    (Authorization) e o X-Correlation-ID ao catálogo, que aplica o RBAC de novo.
+    """
+    resp = await get_http_client().post(
+        f"{CATALOG_SERVICE_URL}/products",
+        json=product.model_dump(),
+        target_audience="catalog-service",
+    )
+    _raise_catalog_error(resp)
+    created: dict[str, Any] = resp.json()
+    logger.info("Produto %s cadastrado por %s", created.get("product_id"), user.user_id)
+    return created
+
+
 @app.post("/payments")
 async def create_payment_endpoint(order: OrderCreateRequest) -> dict[str, Any]:
     order_id = str(uuid.uuid4())
@@ -496,6 +632,7 @@ async def create_order(
     )
     # Persiste no repositório thread-safe
     order_repository.save(new_order)
+    ORDER_RESERVATIONS[order_id] = list(reserved_items)
     logger.info(
         "Pedido %s criado com status PENDING para usuário %s", order_id, user.user_id
     )
@@ -508,10 +645,27 @@ async def create_order(
         "quantity": items[0].quantity,
         "amount": round(total_amount, 2),
         "payment_method": order_in.payment_method,
+        "correlation_id": get_correlation_id(),
+        # Destinatário das notificações, repassado pelo payment-service no evento
+        "customer_id": user.user_id,
+        "customer_email": order_in.customer_email,
     }
 
     payment_info = await request_payment_processing(envelope)
     degraded = bool(payment_info.get("degraded")) or catalog_degraded
+
+    # 4. Pagamento síncrono já respondeu: aplica o resultado agora. No fallback
+    # (PAYMENT_PENDING) o resultado chega depois pelo evento do broker.
+    payment_status = payment_info.get("status")
+    if payment_status in PAYMENT_RESULTS:
+        updated = _apply_payment_result(order_id, payment_status)
+        if updated is not None and updated.status == OrderStatus.CANCELLED:
+            for res_pid, res_qty in ORDER_RESERVATIONS.pop(order_id, []):
+                await release_catalog_stock(res_pid, res_qty)
+        elif updated is not None:
+            ORDER_RESERVATIONS.pop(order_id, None)
+    current = order_repository.get_by_id(order_id)
+    order_status = current.status if current is not None else new_order.status
 
     return {
         "order_id": order_id,
@@ -519,7 +673,7 @@ async def create_order(
         "customer_id": user.user_id,
         "items": [item.model_dump() for item in items],
         "total_amount": round(total_amount, 2),
-        "status": new_order.status.value,
+        "status": order_status.value,
         "degraded": degraded,
         "payment": payment_info,
     }

@@ -113,6 +113,7 @@ async def test_with_timeout_async_estoura():
     with pytest.raises(MiddlewareTimeoutError) as exc:
         await lenta(url="http://catalog/x?token=abc")
     assert exc.value.url == "http://catalog/x"
+    assert exc.value.operation is not None
     assert "lenta" in exc.value.operation
 
 

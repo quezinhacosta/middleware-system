@@ -1,6 +1,7 @@
 import importlib
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -38,7 +39,12 @@ def payment(monkeypatch):
 
 @pytest.fixture
 def servico(payment, monkeypatch):
-    estado = {"process": [], "publish": [], "falhas_process": [], "falhas_publish": []}
+    estado: dict[str, list[Any]] = {
+        "process": [],
+        "publish": [],
+        "falhas_process": [],
+        "falhas_publish": [],
+    }
 
     def fake_process(evento):
         estado["process"].append(evento)

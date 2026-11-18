@@ -1,5 +1,6 @@
 import logging
 import threading
+from typing import Any
 
 import pytest
 
@@ -106,7 +107,7 @@ def test_registro_persiste_em_arquivo(tmp_path):
 
 
 def test_acquire_e_atomico_entre_threads(store):
-    resultados = []
+    resultados: list[AcquireResult] = []
     barreira = threading.Barrier(20)
 
     def disputar():
@@ -114,8 +115,10 @@ def test_acquire_e_atomico_entre_threads(store):
         resultados.append(store.acquire("disputada", 300))
 
     threads = [threading.Thread(target=disputar) for _ in range(20)]
-    [t.start() for t in threads]
-    [t.join() for t in threads]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
     assert resultados.count(AcquireResult.ACQUIRED) == 1
     assert resultados.count(AcquireResult.IN_PROGRESS) == 19
 
@@ -123,7 +126,7 @@ def test_acquire_e_atomico_entre_threads(store):
 def test_acquire_e_atomico_entre_conexoes_diferentes(tmp_path):
     caminho = str(tmp_path / "idem.db")
     stores = [SqliteIdempotencyStore(caminho) for _ in range(8)]
-    resultados = []
+    resultados: list[AcquireResult] = []
     barreira = threading.Barrier(len(stores))
 
     def disputar(s):
@@ -131,9 +134,12 @@ def test_acquire_e_atomico_entre_conexoes_diferentes(tmp_path):
         resultados.append(s.acquire("disputada", 300))
 
     threads = [threading.Thread(target=disputar, args=(s,)) for s in stores]
-    [t.start() for t in threads]
-    [t.join() for t in threads]
-    [s.close() for s in stores]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    for s in stores:
+        s.close()
     assert resultados.count(AcquireResult.ACQUIRED) == 1
 
 
@@ -141,7 +147,7 @@ def test_acquire_e_atomico_entre_conexoes_diferentes(tmp_path):
 
 
 def test_run_once_executa_so_na_primeira_vez(manager):
-    chamadas = []
+    chamadas: list[int] = []
     assert manager.run_once("k", lambda: chamadas.append(1)) is True
     assert manager.run_once("k", lambda: chamadas.append(1)) is False
     assert manager.run_once("k", lambda: chamadas.append(1)) is False
@@ -155,14 +161,14 @@ def test_falha_no_negocio_libera_para_retentativa(manager):
     with pytest.raises(ConnectionError):
         manager.run_once("k", quebra)
 
-    chamadas = []
+    chamadas: list[int] = []
     assert manager.run_once("k", lambda: chamadas.append(1)) is True
     assert chamadas == [1]
 
 
 def test_entrega_em_andamento_lanca_erro_transiente(manager):
     manager.acquire("k")  # simula a 1ª entrega ainda processando
-    chamadas = []
+    chamadas: list[int] = []
     with pytest.raises(MessageInProgressError):
         manager.run_once("k", lambda: chamadas.append(1))
     assert chamadas == []
@@ -188,7 +194,7 @@ def test_registro_indisponivel_falha_fechado():
         def release(self, key):
             pass
 
-    chamadas = []
+    chamadas: list[int] = []
     with pytest.raises(IdempotencyStoreError):
         IdempotencyManager(StoreQuebrado()).run_once("k", lambda: chamadas.append(1))
     assert chamadas == []
@@ -207,7 +213,7 @@ def test_falha_ao_concluir_nao_propaga_nem_reexecuta(store, caplog):
             store.release(key)
 
     caplog.set_level(logging.DEBUG, logger="middleware.transport.idempotency")
-    chamadas = []
+    chamadas: list[int] = []
     mgr = IdempotencyManager(StoreQueFalhaAoConcluir())
     assert mgr.run_once("k", lambda: chamadas.append(1)) is True  # não levantou
     assert chamadas == [1]
@@ -225,7 +231,7 @@ def test_parametros_invalidos(store, kw):
 
 def test_interceptor_executa_uma_vez_e_loga_duplicidade(manager, caplog):
     caplog.set_level(logging.DEBUG, logger="middleware.transport.idempotency")
-    chamadas = []
+    chamadas: list[dict[str, Any]] = []
     interceptor = IdempotentConsumerInterceptor(
         lambda env: chamadas.append(env), manager, namespace="payments"
     )
@@ -242,7 +248,8 @@ def test_interceptor_executa_uma_vez_e_loga_duplicidade(manager, caplog):
 
 
 def test_namespaces_diferentes_nao_se_bloqueiam(manager):
-    pagamento, notificacao = [], []
+    pagamento: list[dict[str, Any]] = []
+    notificacao: list[dict[str, Any]] = []
     IdempotentConsumerInterceptor(pagamento.append, manager, namespace="payments")(
         {"event_id": "e1"}
     )
@@ -253,7 +260,7 @@ def test_namespaces_diferentes_nao_se_bloqueiam(manager):
 
 
 def test_event_ids_diferentes_executam_ambos(manager):
-    chamadas = []
+    chamadas: list[dict[str, Any]] = []
     interceptor = IdempotentConsumerInterceptor(chamadas.append, manager)
     interceptor({"event_id": "a"})
     interceptor({"event_id": "b"})
@@ -261,7 +268,7 @@ def test_event_ids_diferentes_executam_ambos(manager):
 
 
 def test_event_id_inteiro_e_aceito(manager):
-    chamadas = []
+    chamadas: list[dict[str, Any]] = []
     interceptor = IdempotentConsumerInterceptor(chamadas.append, manager)
     interceptor({"event_id": 123})
     interceptor({"event_id": 123})
@@ -281,14 +288,14 @@ def test_event_id_inteiro_e_aceito(manager):
     ids=["ausente", "none", "vazio", "espacos", "lista", "bool"],
 )
 def test_event_id_ausente_ou_invalido_nao_processa(manager, envelope):
-    chamadas = []
+    chamadas: list[dict[str, Any]] = []
     with pytest.raises(UnrecoverableError):
         IdempotentConsumerInterceptor(chamadas.append, manager)(envelope)
     assert chamadas == []
 
 
 def test_chave_customizada(manager):
-    chamadas = []
+    chamadas: list[dict[str, Any]] = []
     interceptor = IdempotentConsumerInterceptor(
         chamadas.append, manager, key="message_id"
     )
@@ -301,7 +308,7 @@ def test_chave_customizada(manager):
 
 
 def test_decorator_em_funcao_com_manager_explicito(manager):
-    chamadas = []
+    chamadas: list[dict[str, Any]] = []
 
     @idempotent(key="event_id", manager=manager)
     def handler(envelope):
@@ -315,7 +322,7 @@ def test_decorator_em_funcao_com_manager_explicito(manager):
 
 def test_decorator_usa_manager_padrao(manager):
     configure_default_manager(manager)
-    chamadas = []
+    chamadas: list[dict[str, Any]] = []
 
     @idempotent(key="event_id")
     def handler(envelope):
@@ -355,8 +362,8 @@ class FakeMethod:
 
 class FakeChannel:
     def __init__(self):
-        self.acks = []
-        self.nacks = []
+        self.acks: list[int] = []
+        self.nacks: list[tuple[int, bool]] = []
 
     def basic_ack(self, delivery_tag):
         self.acks.append(delivery_tag)
@@ -369,8 +376,8 @@ class PaymentConsumer(EventConsumer):
     def __init__(self, channel, topology, manager, **kw):
         super().__init__(channel, topology, **kw)
         self.idempotency_manager = manager
-        self.cobrancas = []
-        self.comportamentos = []
+        self.cobrancas: list[Any] = []
+        self.comportamentos: list[Exception | None] = []
 
     @idempotent(key="event_id", namespace="payments")
     def handle_message(self, envelope):

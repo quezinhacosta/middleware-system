@@ -1,4 +1,6 @@
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from typing import TypedDict
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,11 +13,18 @@ from services.catalog_service.repository import (
 )
 
 
+class _Seed(TypedDict):
+    id: str
+    name: str
+    price: float
+    stock_quantity: int
+
+
 @pytest.fixture(autouse=True)
-def reset_repo():
+def reset_repo() -> Iterator[None]:
     """Restaura o repositório para estado limpo antes de cada teste."""
     repository._storage.clear()
-    seeds = {
+    seeds: dict[str, _Seed] = {
         "1": {
             "id": "1",
             "name": "Notebook Pro 16",
@@ -41,11 +50,11 @@ def reset_repo():
 
 
 @pytest.fixture
-def client():
+def client() -> TestClient:
     return TestClient(app)
 
 
-def test_list_products_com_paginacao_e_filtros(client):
+def test_list_products_com_paginacao_e_filtros(client: TestClient) -> None:
     response = client.get("/products?limit=2")
     assert response.status_code == 200
     assert response.headers.get("X-Total-Count") == "3"
@@ -68,7 +77,7 @@ def test_list_products_com_paginacao_e_filtros(client):
     assert res_price.json()[0]["id"] == "2"
 
 
-def test_get_product_por_id_existente(client):
+def test_get_product_por_id_existente(client: TestClient) -> None:
     response = client.get("/products/1")
     assert response.status_code == 200
     data = response.json()
@@ -78,13 +87,13 @@ def test_get_product_por_id_existente(client):
     assert data["in_stock"] is True
 
 
-def test_get_product_inexistente_retorna_404(client):
+def test_get_product_inexistente_retorna_404(client: TestClient) -> None:
     response = client.get("/products/999")
     assert response.status_code == 404
     assert response.json()["detail"] == "Produto não encontrado"
 
 
-def test_reserve_stock_com_saldo_suficiente_retorna_200(client):
+def test_reserve_stock_com_saldo_suficiente_retorna_200(client: TestClient) -> None:
     response = client.post("/products/1/reserve", json={"quantity": 3})
     assert response.status_code == 200
     data = response.json()
@@ -98,50 +107,51 @@ def test_reserve_stock_com_saldo_suficiente_retorna_200(client):
     assert item["stock_quantity"] == 7
 
 
-def test_reserve_stock_insuficiente_retorna_409(client):
+def test_reserve_stock_insuficiente_retorna_409(client: TestClient) -> None:
     response = client.post("/products/1/reserve", json={"quantity": 20})
     assert response.status_code == 409
     assert "Estoque insuficiente" in response.json()["detail"]
 
 
-def test_reserve_stock_produto_inexistente_retorna_404(client):
+def test_reserve_stock_produto_inexistente_retorna_404(client: TestClient) -> None:
     response = client.post("/products/999/reserve", json={"quantity": 1})
     assert response.status_code == 404
     assert "não encontrado" in response.json()["detail"]
 
 
-def test_reserve_stock_concorrente_garante_atomicidade():
+def test_reserve_stock_concorrente_garante_atomicidade() -> None:
     """Valida que múltiplas threads concorrentes não causam race condition no estoque."""
     repo = ProductRepository(
         {"item_race": {"name": "Item Concorrente", "price": 10.0, "stock_quantity": 20}}
     )
 
-    success_count = 0
-    failure_count = 0
-
-    def try_reserve():
-        nonlocal success_count, failure_count
+    def try_reserve() -> bool:
         try:
             repo.reserve_stock("item_race", 1)
-            success_count += 1
+            return True
         except InsufficientStockError:
-            failure_count += 1
+            return False
 
-    # Dispara 50 threads concorrentes para 20 itens em estoque
+    # Dispara 50 threads concorrentes para 20 itens em estoque.
+    # O resultado vem do retorno de cada tarefa, sem contadores compartilhados.
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(try_reserve) for _ in range(50)]
-        for f in futures:
-            f.result()
+        results = [f.result() for f in futures]
 
-    assert success_count == 20
-    assert failure_count == 30
-    assert repo.get_by_id("item_race").stock_quantity == 0
+    assert results.count(True) == 20
+    assert results.count(False) == 30
+
+    produto = repo.get_by_id("item_race")
+    assert produto is not None
+    assert produto.stock_quantity == 0
 
 
-def test_release_stock_estorna_quantidade_retorna_200(client):
+def test_release_stock_estorna_quantidade_retorna_200(client: TestClient) -> None:
     # Reserva 3 unidades do produto 1 (de 10 para 7)
     client.post("/products/1/reserve", json={"quantity": 3})
-    assert repository.get_by_id("1").stock_quantity == 7
+    produto = repository.get_by_id("1")
+    assert produto is not None
+    assert produto.stock_quantity == 7
 
     # Estorna/compensa 3 unidades
     response = client.post("/products/1/release", json={"quantity": 3})
@@ -151,9 +161,12 @@ def test_release_stock_estorna_quantidade_retorna_200(client):
     assert data["released_quantity"] == 3
     assert data["remaining_stock"] == 10
     assert data["status"] == "released"
-    assert repository.get_by_id("1").stock_quantity == 10
+
+    produto = repository.get_by_id("1")
+    assert produto is not None
+    assert produto.stock_quantity == 10
 
 
-def test_release_stock_produto_inexistente_retorna_404(client):
+def test_release_stock_produto_inexistente_retorna_404(client: TestClient) -> None:
     response = client.post("/products/999/release", json={"quantity": 1})
     assert response.status_code == 404

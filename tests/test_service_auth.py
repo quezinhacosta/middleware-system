@@ -79,9 +79,9 @@ def test_wrong_audience_returns_401(client):
 
 
 def test_alg_none_returns_401(client):
-    forged = jwt.encode(
-        {"iss": "order-service", "aud": "catalog-service"}, None, algorithm="none"
-    )
+    claims = {"iss": "order-service", "aud": "catalog-service"}
+    # key=None é intencional: gera um token "alg=none" não assinado
+    forged = jwt.encode(claims, None, algorithm="none")  # type: ignore[arg-type]
     assert _post(client, forged).status_code == 401
 
 

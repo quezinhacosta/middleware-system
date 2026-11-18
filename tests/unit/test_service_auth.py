@@ -117,7 +117,8 @@ def test_algoritmo_none_e_rejeitado(auth):
         "exp": int(time.time()) + 60,
         "jti": "x",
     }
-    token = jwt.encode(claims, key=None, algorithm="none")
+    # key=None é intencional: gera um token "alg=none" não assinado
+    token = jwt.encode(claims, key=None, algorithm="none")  # type: ignore[arg-type]
     with pytest.raises(ServiceAuthError):
         auth.validate_token(token, "catalog-service")
 
