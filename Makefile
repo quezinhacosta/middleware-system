@@ -1,4 +1,10 @@
-.PHONY: help install lint format test test-unit test-integration test-cov build up down logs clean pre-commit-install
+.PHONY: help install lint format test test-unit test-integration test-cov build images up down logs clean pre-commit-install
+
+# Microsservicos com imagem propria (nomes dos servicos no docker-compose.yml)
+SERVICES := order-service catalog-service notification-service payment-service
+# Tag das imagens locais (ex.: make build TAG=v1.0.0)
+TAG ?= latest
+export TAG
 
 # Python e ferramentas
 PYTHON ?= python3
@@ -17,7 +23,9 @@ help:
 	@echo "  make test-unit           Executa so os testes unitarios (sem Docker) com cobertura minima"
 	@echo "  make test-integration    Executa os testes de integracao (sobe containers via docker compose)"
 	@echo "  make test-cov            Executa os testes unitarios gerando relatorio de cobertura"
-	@echo "  make build               Constroi as imagens Docker dos microsservicos"
+	@echo "  make build               Constroi as imagens Docker de todos os microsservicos (TAG=<tag> opcional)"
+	@echo "  make build-<servico>     Constroi a imagem de um servico (ex.: make build-order-service)"
+	@echo "  make images              Lista as imagens locais geradas para os microsservicos"
 	@echo "  make up                  Sobe a stack completa com docker compose"
 	@echo "  make down                Para a stack e remove os containers"
 	@echo "  make logs                Exibe os logs em tempo real dos containers"
@@ -56,7 +64,13 @@ test-cov:
 	$(PYTHON) -m pytest tests -m "not integration" --cov=middleware --cov=services --cov-report=term-missing
 
 build:
-	docker compose build
+	docker compose build $(SERVICES)
+
+build-%:
+	docker compose build $*
+
+images:
+	docker images "middleware-system/*"
 
 up:
 	docker compose up -d
