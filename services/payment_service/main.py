@@ -65,6 +65,14 @@ app.include_router(health_router)
 app.include_router(build_metrics_router(metrics))
 
 
+@app.get("/health", tags=["Healthcheck"])
+def healthcheck() -> dict[str, str]:
+    return {
+        "status": "UP",
+        "service": os.environ.get("SERVICE_NAME", "payment-service"),
+    }
+
+
 class PaymentRequest(BaseModel):
     """Pedido de autorização enviado pelo order-service."""
 

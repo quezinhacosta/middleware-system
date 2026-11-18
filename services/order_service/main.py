@@ -426,6 +426,14 @@ def read_root() -> dict[str, str]:
     }
 
 
+@app.get("/health", tags=["Healthcheck"])
+def healthcheck() -> dict[str, str]:
+    return {
+        "status": "UP",
+        "service": settings.SERVICE_NAME,
+    }
+
+
 @app.get("/catalog/recommendations")
 async def get_recommendations_endpoint() -> dict[str, Any]:
     return await fetch_catalog_recommendations()
