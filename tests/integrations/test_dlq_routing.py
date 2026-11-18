@@ -7,6 +7,7 @@ import pytest
 from dotenv import load_dotenv
 
 from middleware.transport.consumer import Topology, declare_topology
+from tests.integrations.helpers import compose
 
 load_dotenv()
 
@@ -51,27 +52,13 @@ def _obter_credenciais_broker() -> tuple[str, str]:
 @pytest.fixture
 def rabbitmq_channel():
     ja_rodava = _container_em_execucao("message-broker")
-    env = {
-        **os.environ,
-        "POSTGRES_USER": os.environ.get("POSTGRES_USER", "postgres"),
-        "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "postgres"),
-        "RABBITMQ_DEFAULT_USER": os.environ.get("RABBITMQ_DEFAULT_USER", "guest"),
-        "RABBITMQ_DEFAULT_PASS": os.environ.get("RABBITMQ_DEFAULT_PASS", "guest"),
-        # O compose valida todas as variáveis obrigatórias, mesmo ao subir só o broker
-        "GRAFANA_ADMIN_PASSWORD": os.environ.get(
-            "GRAFANA_ADMIN_PASSWORD", "teste_grafana_nao_e_de_producao"
-        ),
-        "SERVICE_TOKEN_SECRET": os.environ.get(
-            "SERVICE_TOKEN_SECRET", "test-secret-key"
-        ),
-    }
 
     if not ja_rodava:
-        subprocess.run(
-            ["docker", "compose", "up", "-d", "message-broker"],
-            env=env,
-            check=True,
-        )
+        # Usa os arquivos de override e as credenciais de teste do helper,
+        # e não os volumes de desenvolvimento.
+        resultado = compose("up", "-d", "message-broker")
+        if resultado.returncode != 0:
+            pytest.fail(f"docker compose up falhou:\n{resultado.stderr[-1500:]}")
 
     host = os.getenv("RABBITMQ_HOST", "localhost")
     port = int(os.getenv("RABBITMQ_PORT", "5672"))
@@ -112,11 +99,9 @@ def rabbitmq_channel():
             except Exception:
                 pass
         if not ja_rodava:
-            subprocess.run(
-                ["docker", "compose", "down", "-v"],
-                env=env,
-                check=False,
-            )
+            # Usa os mesmos arquivos de override do conftest: sem eles, o `down -v`
+            # removeria também os volumes de desenvolvimento.
+            compose("down", "-v")
 
 
 @pytest.mark.integration
