@@ -22,6 +22,13 @@ MESSAGES: dict[str, str] = {
 history: deque[dict[str, Any]] = deque(maxlen=HISTORY_SIZE)
 
 
+def _recipient(data: dict[str, Any]) -> str:
+    """E-mail do cliente; sem ele, o identificador do cliente."""
+    return str(
+        data.get("customer_email") or data.get("customer_id") or "cliente-desconhecido"
+    )
+
+
 def build_notification(envelope: EventEnvelope) -> dict[str, Any]:
     """Monta a notificação simulada. Levanta KeyError para evento desconhecido."""
     template = MESSAGES[envelope.event_name]
@@ -29,7 +36,7 @@ def build_notification(envelope: EventEnvelope) -> dict[str, Any]:
     return {
         "event_name": envelope.event_name,
         "correlation_id": envelope.correlation_id,
-        "to": envelope.data.get("customer_email", "cliente-desconhecido"),
+        "to": _recipient(envelope.data),
         "message": template.format(order_id=order_id),
     }
 

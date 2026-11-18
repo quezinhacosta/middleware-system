@@ -71,18 +71,20 @@ class NotificationConsumer:
         properties: BasicProperties,
         body: bytes,
     ) -> None:
-        # pika sempre preenche routing_key e delivery_tag nas entregas recebidas
+        delivery_tag = method.delivery_tag
+        if delivery_tag is None:
+            logger.error("mensagem recebida sem delivery_tag; ignorando")
+            return
         queue = method.routing_key if isinstance(method.routing_key, str) else ""
-        tag = method.delivery_tag or 0
         try:
             self._handler(body)
         except Exception:
             logger.exception("falha ao processar mensagem da fila")
             self._record(queue, "error")
-            channel.basic_nack(delivery_tag=tag, requeue=False)
+            channel.basic_nack(delivery_tag=delivery_tag, requeue=False)
             return
         self._record(queue, "ok")
-        channel.basic_ack(delivery_tag=tag)
+        channel.basic_ack(delivery_tag=delivery_tag)
 
     def _record(self, queue: str, status: str) -> None:
         if self._metrics is not None:

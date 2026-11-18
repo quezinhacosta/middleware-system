@@ -1,8 +1,9 @@
 import threading
 import time
 import urllib.request
+from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -16,10 +17,19 @@ FAILURE_THRESHOLD = 5
 RECOVERY_TIMEOUT = 0.3  # curto para o teste; em produção: 10s
 
 
+class _CatalogServer(ThreadingHTTPServer):
+    """Servidor fake do catálogo, com estado exposto para os testes."""
+
+    healthy: bool
+    hits: int
+    url: str
+
+
 class _CatalogHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.server.hits += 1
-        if self.server.healthy:
+    def do_GET(self) -> None:
+        server = cast(_CatalogServer, self.server)
+        server.hits += 1
+        if server.healthy:
             body = b'[{"id": 1, "name": "Teclado"}]'
             self.send_response(200)
         else:
@@ -29,13 +39,13 @@ class _CatalogHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, *args):  # silencia o log do servidor
+    def log_message(self, format: str, *args: Any) -> None:  # silencia o log
         pass
 
 
 @pytest.fixture
-def catalog():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _CatalogHandler)
+def catalog() -> Iterator[_CatalogServer]:
+    server = _CatalogServer(("127.0.0.1", 0), _CatalogHandler)
     server.healthy = True
     server.hits = 0
     server.url = f"http://127.0.0.1:{server.server_port}/products"
@@ -61,7 +71,7 @@ def fetch_products(url: str) -> bytes:
         return cast(bytes, resp.read())
 
 
-def trip(breaker, catalog):
+def trip(breaker, catalog: _CatalogServer) -> None:
     """Derruba o catálogo e causa 5 falhas consecutivas."""
     catalog.healthy = False
     for _ in range(FAILURE_THRESHOLD):
@@ -112,7 +122,7 @@ def test_half_open_e_fechamento_quando_servico_volta(breaker, catalog):
     time.sleep(RECOVERY_TIMEOUT + 0.05)
     catalog.healthy = True
 
-    observed = []
+    observed: list[CircuitState] = []
 
     def canary():
         observed.append(breaker.state)
@@ -146,7 +156,8 @@ def test_apenas_um_canario_em_half_open_sob_concorrencia(breaker):
             breaker.call(boom)
     time.sleep(RECOVERY_TIMEOUT + 0.05)
 
-    executed, rejected = [], []
+    executed: list[int] = []
+    rejected: list[int] = []
     barrier = threading.Barrier(20)
 
     def slow_ok():
@@ -197,7 +208,12 @@ def test_metrica_de_estado(breaker, catalog):
 
     time.sleep(RECOVERY_TIMEOUT + 0.05)
     catalog.healthy = True
-    seen = []
-    breaker.call(lambda: seen.append(gauge()) or fetch_products(catalog.url))
+    seen: list[Any] = []
+
+    def canary():
+        seen.append(gauge())
+        return fetch_products(catalog.url)
+
+    breaker.call(canary)
     assert seen == [1]  # HALF_OPEN durante o canário
     assert gauge() == 0  # CLOSED de volta

@@ -1,15 +1,25 @@
 import os
 import subprocess
 import time
+from collections.abc import Iterator
 
 import pika
+import pika.exceptions
 import pytest
 from dotenv import load_dotenv
+from pika.adapters.blocking_connection import BlockingChannel
 
 from middleware.transport.consumer import Topology, declare_topology
-from tests.integrations.helpers import compose
 
 load_dotenv()
+
+
+def _docker_disponivel() -> bool:
+    try:
+        res = subprocess.run(["docker", "info"], capture_output=True, check=False)
+    except FileNotFoundError:
+        return False
+    return res.returncode == 0
 
 
 def _container_em_execucao(nome: str) -> bool:
@@ -50,18 +60,42 @@ def _obter_credenciais_broker() -> tuple[str, str]:
 
 
 @pytest.fixture
-def rabbitmq_channel():
+def rabbitmq_channel() -> Iterator[BlockingChannel]:
+    if not _docker_disponivel():
+        pytest.skip("Docker indisponível: teste de integração pulado")
+
     ja_rodava = _container_em_execucao("message-broker")
+    env = {
+        **os.environ,
+        "POSTGRES_USER": os.environ.get("POSTGRES_USER", "postgres"),
+        "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "postgres"),
+        "RABBITMQ_DEFAULT_USER": os.environ.get("RABBITMQ_DEFAULT_USER", "guest"),
+        "RABBITMQ_DEFAULT_PASS": os.environ.get("RABBITMQ_DEFAULT_PASS", "guest"),
+        # O compose valida todas as variáveis obrigatórias, mesmo ao subir só o broker
+        "GRAFANA_ADMIN_PASSWORD": os.environ.get(
+            "GRAFANA_ADMIN_PASSWORD", "teste_grafana_nao_e_de_producao"
+        ),
+        "SERVICE_TOKEN_SECRET": os.environ.get(
+            "SERVICE_TOKEN_SECRET", "test-secret-key"
+        ),
+    }
 
     if not ja_rodava:
-        # Usa os arquivos de override e as credenciais de teste do helper,
-        # e não os volumes de desenvolvimento.
-        resultado = compose("up", "-d", "message-broker")
-        if resultado.returncode != 0:
-            pytest.fail(f"docker compose up falhou:\n{resultado.stderr[-1500:]}")
+        res = subprocess.run(
+            ["docker", "compose", "up", "-d", "message-broker"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            pytest.fail(
+                "docker compose up -d message-broker falhou "
+                f"(código {res.returncode}):\n{res.stderr or res.stdout}"
+            )
 
-    host = os.getenv("RABBITMQ_HOST", "localhost")
-    port = int(os.getenv("RABBITMQ_PORT", "5672"))
+    host = os.getenv("RABBITMQ_TEST_HOST", "localhost")
+    port = int(os.getenv("RABBITMQ_TEST_PORT", "5672"))
 
     connection = None
     ultimo_erro: Exception | None = None
@@ -99,13 +133,17 @@ def rabbitmq_channel():
             except Exception:
                 pass
         if not ja_rodava:
-            # Usa os mesmos arquivos de override do conftest: sem eles, o `down -v`
-            # removeria também os volumes de desenvolvimento.
-            compose("down", "-v")
+            # Remove só o broker (e seus volumes anônimos). `compose down -v`
+            # derrubaria todos os serviços e apagaria os volumes do projeto.
+            subprocess.run(
+                ["docker", "compose", "rm", "-sfv", "message-broker"],
+                env=env,
+                check=False,
+            )
 
 
 @pytest.mark.integration
-def test_rabbitmq_roteia_nack_para_dlq(rabbitmq_channel):
+def test_rabbitmq_roteia_nack_para_dlq(rabbitmq_channel: BlockingChannel) -> None:
     topology = Topology(
         exchange="test.integration.ex",
         queue="test.integration.q",
@@ -127,6 +165,7 @@ def test_rabbitmq_roteia_nack_para_dlq(rabbitmq_channel):
     # 3. Consome da fila principal e dá NACK sem requeue
     method_frame, _, body = rabbitmq_channel.basic_get(queue=topology.queue)
     assert method_frame is not None
+    assert method_frame.delivery_tag is not None
     assert body == b"{json-invalido}"
 
     rabbitmq_channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False)

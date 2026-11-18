@@ -318,8 +318,9 @@ def test_dlq_gera_log_sem_vazar_o_corpo(make, ch, caplog):
 
 
 def test_handle_message_e_abstrato(ch, topology):
+    # Instanciar a classe abstrata é intencional: o teste verifica o TypeError.
     with pytest.raises(TypeError):
-        EventConsumer(ch, topology)
+        EventConsumer(ch, topology)  # type: ignore[abstract]
 
 
 @pytest.mark.parametrize(

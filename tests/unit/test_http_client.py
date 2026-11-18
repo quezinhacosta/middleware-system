@@ -257,6 +257,7 @@ async def test_prazo_total_estourado_vira_middleware_timeout(monkeypatch):
 
     assert exc.value.timeout == 0.05
     assert exc.value.url == "http://catalog/x"  # query string removida
+    assert exc.value.operation is not None
     assert "GET" in exc.value.operation
 
 
