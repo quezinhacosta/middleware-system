@@ -19,8 +19,15 @@ from middleware.observability.correlation import (
 )
 from middleware.observability.health import router as health_router
 from middleware.observability.logging import configure_logging
+from middleware.observability.metrics import (
+    MetricsCollector,
+    MetricsMiddleware,
+    build_metrics_router,
+)
 from middleware.observability.openapi_responses import COMMON_RESPONSES
 from middleware.transport.idempotency import MessageInProgressError
+
+metrics = MetricsCollector(service=os.getenv("SERVICE_NAME", "payment-service"))
 
 configure_logging(
     service=os.environ.get("SERVICE_NAME", "payment-service"),
@@ -53,7 +60,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(MetricsMiddleware, collector=metrics)
 app.include_router(health_router)
+app.include_router(build_metrics_router(metrics))
 
 
 class PaymentRequest(BaseModel):

@@ -12,6 +12,11 @@ from middleware.config import Settings, get_settings
 from middleware.observability.correlation import CorrelationIdMiddleware
 from middleware.observability.health import router as health_router
 from middleware.observability.logging import configure_logging
+from middleware.observability.metrics import (
+    MetricsCollector,
+    MetricsMiddleware,
+    build_metrics_router,
+)
 from middleware.observability.openapi_responses import COMMON_RESPONSES
 from services.catalog_service.models import (
     Product,
@@ -26,6 +31,8 @@ from services.catalog_service.repository import (
 )
 
 logger = logging.getLogger("catalog-service")
+
+metrics = MetricsCollector(service=os.environ.get("SERVICE_NAME", "catalog-service"))
 
 try:
     settings: Settings = get_settings()
@@ -54,8 +61,11 @@ app.add_middleware(
     protected_routes=[("POST", "/products")],
 )
 
+app.add_middleware(MetricsMiddleware, collector=metrics)
+
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(build_metrics_router(metrics))
 
 # Dados mock (seeds) iniciais para popular o repositório
 INITIAL_SEEDS: dict[str, dict[str, Any]] = {

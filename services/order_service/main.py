@@ -22,6 +22,11 @@ from middleware.observability.correlation import (
 )
 from middleware.observability.health import router as health_router
 from middleware.observability.logging import configure_logging
+from middleware.observability.metrics import (
+    MetricsCollector,
+    MetricsMiddleware,
+    build_metrics_router,
+)
 from middleware.observability.openapi_responses import COMMON_RESPONSES
 from middleware.resilience.circuit_breaker import CircuitBreaker
 from middleware.resilience.exceptions import MiddlewareTimeoutError
@@ -45,6 +50,8 @@ from services.order_service.repository import OrderRepository
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("order-service")
+
+metrics = MetricsCollector(service=os.environ.get("SERVICE_NAME", "order-service"))
 
 try:
     settings: Settings = get_settings()
@@ -156,9 +163,11 @@ app.add_middleware(
     protected_paths={"/orders"},
 )
 app.add_middleware(AuthContextMiddleware)
+app.add_middleware(MetricsMiddleware, collector=metrics)
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(build_metrics_router(metrics))
 register_resilience_handlers(app)
 
 
