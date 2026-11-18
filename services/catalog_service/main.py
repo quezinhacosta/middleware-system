@@ -105,6 +105,14 @@ def read_root() -> dict[str, str]:
     }
 
 
+@app.get("/health", tags=["Healthcheck"])
+def healthcheck() -> dict[str, str]:
+    return {
+        "status": "UP",
+        "service": settings.SERVICE_NAME,
+    }
+
+
 @app.get("/recommendations")
 def get_recommendations() -> dict[str, Any]:
     products = repository.list_products(limit=10)

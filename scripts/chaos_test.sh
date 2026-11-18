@@ -15,18 +15,29 @@ IFS=$'\n\t'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# Carrega variáveis do .env caso exista na raiz do projeto
+if [[ -f "${PROJECT_ROOT}/.env" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "${PROJECT_ROOT}/.env"
+  set +a
+fi
+
 # ----------------------------- Configuração ----------------------------------
 COMPOSE_FILE="${COMPOSE_FILE:-${PROJECT_ROOT}/docker-compose.yml}"
 ORDER_URL="${ORDER_URL:-http://localhost:8000}"
 ORDER_ENDPOINT="${ORDER_ENDPOINT:-/orders}"
 ORDER_HEALTH_URL="${ORDER_HEALTH_URL:-${ORDER_URL}/health}"
 CATALOG_HEALTH_URL="${CATALOG_HEALTH_URL:-http://localhost:8001/health}"
+AUTH_URL="${AUTH_URL:-${ORDER_URL}/auth/login}"
+AUTH_USERNAME="${AUTH_USERNAME:-chaos_runner}"
+AUTH_ROLES="${AUTH_ROLES:-customer}"
 ORDER_PAYLOAD="${ORDER_PAYLOAD:-{\"product_id\":1,\"quantity\":1}}"
 
 RABBIT_API="${RABBIT_API:-http://localhost:15672/api}"
 RABBIT_USER="${RABBITMQ_DEFAULT_USER:-guest}"
 RABBIT_PASS="${RABBITMQ_DEFAULT_PASS:-guest}"
-PAYMENT_QUEUE="${PAYMENT_QUEUE:-payment_queue}"
+PAYMENT_QUEUE="${PAYMENT_QUEUE:-order.created}"
 
 REQUEST_INTERVAL="${REQUEST_INTERVAL:-0.3}"   # segundos entre pedidos
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-5}"       # timeout por requisição (s)
@@ -44,6 +55,7 @@ mkdir -p "$LOG_DIR"
 CURRENT_SCENARIO="setup"
 FAILURES=0
 TRAFFIC_PID=""
+AUTH_TOKEN=""
 
 # ------------------------------ Logging JSON ---------------------------------
 json_escape() {
@@ -92,12 +104,31 @@ queue_field() { # queue_field <campo>  (messages, messages_ready, consumers, dur
     | jq -r --arg f "$1" '.[$f] | tostring'
 }
 
+obtain_auth_token() {
+  local resp token
+  resp="$(curl -s --max-time 5 -X POST -H 'Content-Type: application/json' \
+    -d "{\"username\":\"${AUTH_USERNAME}\",\"roles\":[\"${AUTH_ROLES}\"],\"expires_in_seconds\":3600}" \
+    "${AUTH_URL}" 2>/dev/null || true)"
+  token="$(printf '%s' "$resp" | jq -r '.access_token // empty' 2>/dev/null || true)"
+  if [[ -z "$token" ]]; then
+    log ERROR auth_failed "Não foi possível obter token JWT em ${AUTH_URL}"
+    exit 2
+  fi
+  AUTH_TOKEN="$token"
+  log INFO auth_ok "Token JWT obtido para usuário ${AUTH_USERNAME}"
+}
+
 # ---------------------------- Gerador de tráfego -----------------------------
 traffic_loop() {
   local code
+  local -a auth_hdr=()
+  if [[ -n "$AUTH_TOKEN" ]]; then
+    auth_hdr=(-H "Authorization: Bearer ${AUTH_TOKEN}")
+  fi
   while true; do
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time "$REQUEST_TIMEOUT" \
       -X POST -H 'Content-Type: application/json' \
+      "${auth_hdr[@]}" \
       -d "$ORDER_PAYLOAD" "${ORDER_URL}${ORDER_ENDPOINT}" || true)"
     printf '%s %s\n' "$(date +%s)" "${code:-000}" >> "$RESULTS_FILE"
     sleep "$REQUEST_INTERVAL"
@@ -157,13 +188,16 @@ preflight() {
 
   local running svc
   running="$(dc ps --status running --services)"
-  for svc in order-service catalog-service payment-service rabbitmq; do
+  for svc in order-service catalog-service payment-service message-broker; do
     grep -qx "$svc" <<<"$running" \
       || { log ERROR service_down "$svc não está em execução (docker compose up -d)"; exit 2; }
   done
 
   wait_until "$RECOVERY_TIMEOUT" test "$(http_status "$ORDER_HEALTH_URL")" = 200 \
-    || { log ERROR order_unhealthy "order-service não respondeu /health"; exit 2; }
+    || { log ERROR order_unhealthy "order-service não respondeu ${ORDER_HEALTH_URL}"; exit 2; }
+
+  obtain_auth_token
+
   queue_field messages >/dev/null \
     || { log ERROR queue_missing "Fila ${PAYMENT_QUEUE} inacessível via API do RabbitMQ"; exit 2; }
 
@@ -176,8 +210,20 @@ count_contingency_logs() { # <iso_timestamp>
     | grep -Eic "$CONTINGENCY_LOG_PATTERN" || true
 }
 
-order_healthy()   { [[ "$(http_status "$ORDER_HEALTH_URL")" == "200" ]]; }
-catalog_healthy() { [[ "$(http_status "$CATALOG_HEALTH_URL")" == "200" ]]; }
+order_healthy() { [[ "$(http_status "$ORDER_HEALTH_URL")" == "200" ]]; }
+
+catalog_healthy() {
+  # Tenta primeiro via HTTP no host caso a porta esteja exposta
+  local status
+  status="$(http_status "$CATALOG_HEALTH_URL")"
+  if [[ "$status" == "200" ]]; then
+    return 0
+  fi
+  # Como o catalog-service é um serviço interno (não expõe porta no host),
+  # valida a saúde internamente pelo container via docker compose exec
+  dc exec -T catalog-service python -c \
+    "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)" >/dev/null 2>&1
+}
 
 scenario_1_catalog_failure() {
   CURRENT_SCENARIO="cenario_1_catalog"
