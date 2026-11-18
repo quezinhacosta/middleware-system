@@ -57,6 +57,10 @@ def rabbitmq_channel():
         "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "postgres"),
         "RABBITMQ_DEFAULT_USER": os.environ.get("RABBITMQ_DEFAULT_USER", "guest"),
         "RABBITMQ_DEFAULT_PASS": os.environ.get("RABBITMQ_DEFAULT_PASS", "guest"),
+        # O compose valida todas as variáveis obrigatórias, mesmo ao subir só o broker
+        "GRAFANA_ADMIN_PASSWORD": os.environ.get(
+            "GRAFANA_ADMIN_PASSWORD", "teste_grafana_nao_e_de_producao"
+        ),
         "SERVICE_TOKEN_SECRET": os.environ.get(
             "SERVICE_TOKEN_SECRET", "test-secret-key"
         ),
