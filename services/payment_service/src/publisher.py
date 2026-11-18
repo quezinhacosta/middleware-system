@@ -30,7 +30,7 @@ def publish_event(event_data: dict[str, Any]) -> None:
         channel.basic_publish(
             exchange="",
             routing_key=status_queue,
-            body=json.dumps(event_data),
+            body=json.dumps(event_data).encode("utf-8"),
             properties=pika.BasicProperties(
                 delivery_mode=2,
             ),
