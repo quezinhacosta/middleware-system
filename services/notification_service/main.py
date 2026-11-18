@@ -8,6 +8,11 @@ from fastapi import FastAPI
 from middleware.observability.correlation import CorrelationIdMiddleware
 from middleware.observability.health import router as health_router
 from middleware.observability.logging import configure_logging
+from middleware.observability.metrics import (
+    MetricsCollector,
+    MetricsMiddleware,
+    build_metrics_router,
+)
 from middleware.observability.openapi_responses import COMMON_RESPONSES
 from services.notification_service.consumer import NotificationConsumer
 from services.notification_service.notifications import handle_event, history
@@ -15,13 +20,17 @@ from services.notification_service.notifications import handle_event, history
 # Filas de status que disparam notificações ao cliente
 QUEUES = ["payment.approved", "payment.rejected", "order.cancelled"]
 
+metrics = MetricsCollector(
+    service=os.environ.get("SERVICE_NAME", "notification-service")
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     amqp_url = os.environ.get("AMQP_URL")
     consumer = None
     if amqp_url:
-        consumer = NotificationConsumer(amqp_url, QUEUES, handle_event)
+        consumer = NotificationConsumer(amqp_url, QUEUES, handle_event, metrics)
         consumer.start()
     yield
     if consumer is not None:
@@ -43,7 +52,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(MetricsMiddleware, collector=metrics)
 app.include_router(health_router)
+app.include_router(build_metrics_router(metrics))
 
 
 @app.get("/health", tags=["Observabilidade"])

@@ -9,6 +9,8 @@ from pika.adapters.blocking_connection import BlockingChannel
 from pika.exceptions import AMQPError
 from pika.spec import Basic, BasicProperties
 
+from middleware.observability.metrics import MetricsCollector
+
 logger = logging.getLogger(__name__)
 
 RETRY_DELAY_SECONDS = 2.0
@@ -27,10 +29,12 @@ class NotificationConsumer:
         amqp_url: str,
         queues: list[str],
         handler: Callable[[bytes], object],
+        metrics: MetricsCollector | None = None,
     ) -> None:
         self._params = pika.URLParameters(amqp_url)
         self._queues = queues
         self._handler = handler
+        self._metrics = metrics
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
@@ -67,10 +71,17 @@ class NotificationConsumer:
         properties: BasicProperties,
         body: bytes,
     ) -> None:
+        queue = method.routing_key
         try:
             self._handler(body)
         except Exception:
             logger.exception("falha ao processar mensagem da fila")
+            self._record(queue, "error")
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
+        self._record(queue, "ok")
         channel.basic_ack(delivery_tag=method.delivery_tag)
+
+    def _record(self, queue: str, status: str) -> None:
+        if self._metrics is not None:
+            self._metrics.observe_message(queue, status)

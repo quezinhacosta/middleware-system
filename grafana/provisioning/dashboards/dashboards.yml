@@ -1,0 +1,12 @@
+# Carrega os dashboards da pasta montada no container
+apiVersion: 1
+
+providers:
+  - name: middleware
+    orgId: 1
+    folder: Middleware
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

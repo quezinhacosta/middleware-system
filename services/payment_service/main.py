@@ -7,6 +7,13 @@ from fastapi import FastAPI
 from src.consumer import start_consuming
 
 from middleware.observability.health import router as health_router
+from middleware.observability.metrics import (
+    MetricsCollector,
+    MetricsMiddleware,
+    build_metrics_router,
+)
+
+metrics = MetricsCollector(service=os.getenv("SERVICE_NAME", "payment-service"))
 
 
 @asynccontextmanager
@@ -33,7 +40,9 @@ app = FastAPI(
     openapi_url="/openapi.json",
     lifespan=lifespan,
 )
+app.add_middleware(MetricsMiddleware, collector=metrics)
 app.include_router(health_router)
+app.include_router(build_metrics_router(metrics))
 
 
 if __name__ == "__main__":
